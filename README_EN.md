@@ -15,7 +15,7 @@ This is an **AI Agent skill** that enables AI to automatically analyze malware u
 
 ## Demo Video
 
-Demonstration using my multi-agent framework Spore:
+Demonstration using my multi-agent framework Spore: Since the video embedded in the readme file failed to upload, please download movie.mp4.
 
 ## How to Use?
 
