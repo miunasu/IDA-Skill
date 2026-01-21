@@ -1,0 +1,737 @@
+# ida_ida
+
+Contains the ::inf structure definition and some functions common to the whole IDA project.
+
+The ::inf structure is saved in the database and contains information specific
+to the current program being disassembled. Initially it is filled with values
+from ida.cfg.
+
+Although it is not a good idea to change values in ::inf structure (because you
+will overwrite values taken from ida.cfg), you are allowed to do it if you feel
+it necessary.
+
+## Constants
+
+- `AF_FINAL`: Final pass of analysis.
+- `f_EXE_old`: MS DOS EXE File.
+- `f_COM_old`: MS DOS COM File.
+- `f_BIN`: Binary File.
+- `f_DRV`: MS DOS Driver.
+- `f_WIN`: New Executable (NE)
+- `f_HEX`: Intel Hex Object File.
+- `f_MEX`: MOS Technology Hex Object File.
+- `f_LX`: Linear Executable (LX)
+- `f_LE`: Linear Executable (LE)
+- `f_NLM`: Netware Loadable Module (NLM)
+- `f_COFF`: Common Object File Format (COFF)
+- `f_PE`: Portable Executable (PE)
+- `f_OMF`: Object Module Format.
+- `f_SREC`: Motorola SREC (S-record)
+- `f_ZIP`: ZIP file (this file is never loaded to IDA database)
+- `f_OMFLIB`: Library of OMF Modules.
+- `f_AR`: ar library
+- `f_LOADER`: file is loaded using LOADER DLL
+- `f_ELF`: Executable and Linkable Format (ELF)
+- `f_W32RUN`: Watcom DOS32 Extender (W32RUN)
+- `f_AOUT`: Linux a.out (AOUT)
+- `f_PRC`: PalmPilot program file.
+- `f_EXE`: MS DOS EXE File.
+- `f_COM`: MS DOS COM File.
+- `f_AIXAR`: AIX ar library.
+- `f_MACHO`: Mac OS X Mach-O.
+- `f_PSXOBJ`: Sony Playstation PSX object file.
+- `f_MD1IMG`: Mediatek Firmware Image.
+- `STT_CUR`: use current storage type (may be used only as a function argument)
+- `STT_VA`: regular storage: virtual arrays, an explicit flag for each byte
+- `STT_MM`: memory map: sparse storage. useful for huge objects
+- `STT_DBG`: memory map: temporary debugger storage. used internally
+- `IDAINFO_TAG_SIZE`: The database parameters. This structure is kept in the ida database. It contains the essential parameters for the current program
+- `IDAINFO_PROCNAME_SIZE`
+- `IDAINFO_STRLIT_PREF_SIZE`
+- `INFFL_AUTO`: Autoanalysis is enabled?
+- `INFFL_ALLASM`: may use constructs not supported by the target assembler
+- `INFFL_LOADIDC`: loading an idc file that contains database info
+- `INFFL_NOUSER`: do not store user info in the database
+- `INFFL_READONLY`: (internal) temporary interdiction to modify the database
+- `INFFL_CHKOPS`: check manual operands? (unused)
+- `INFFL_NMOPS`: allow non-matched operands? (unused)
+- `INFFL_GRAPH_VIEW`: currently using graph options ( text_options_t::graph)
+- `LFLG_PC_FPP`: decode floating point processor instructions?
+- `LFLG_PC_FLAT`: 32-bit program (or higher)?
+- `LFLG_64BIT`: 64-bit program?
+- `LFLG_IS_DLL`: Is dynamic library?
+- `LFLG_FLAT_OFF32`: treat REF_OFF32 as 32-bit offset for 16bit segments (otherwise try SEG16:OFF16)
+- `LFLG_MSF`: Byte order: is MSB first?
+- `LFLG_WIDE_HBF`: Bit order of wide bytes: high byte first? (wide bytes: processor_t::dnbits > 8)
+- `LFLG_DBG_NOPATH`: do not store input full path in debugger process options
+- `LFLG_SNAPSHOT`: memory snapshot was taken?
+- `LFLG_PACK`: pack the database?
+- `LFLG_COMPRESS`: compress the database?
+- `LFLG_KERNMODE`: is kernel mode binary?
+- `LFLG_ILP32`: 64-bit instructions with 64-bit registers, but 32-bit pointers and address space. this bit is mutually exclusive with LFLG_64BIT
+- `IDB_UNPACKED`: leave database components unpacked
+- `IDB_PACKED`: pack database components into .idb
+- `IDB_COMPRESSED`: compress & pack database components
+- `AF_CODE`: Trace execution flow.
+- `AF_MARKCODE`: Mark typical code sequences as code.
+- `AF_JUMPTBL`: Locate and create jump tables.
+- `AF_PURDAT`: Control flow to data segment is ignored.
+- `AF_USED`: Analyze and create all xrefs.
+- `AF_UNK`: Delete instructions with no xrefs.
+- `AF_PROCPTR`: Create function if data xref data->code32 exists.
+- `AF_PROC`: Create functions if call is present.
+- `AF_FTAIL`: Create function tails.
+- `AF_LVAR`: Create stack variables.
+- `AF_STKARG`: Propagate stack argument information.
+- `AF_REGARG`: Propagate register argument information.
+- `AF_TRACE`: Trace stack pointer.
+- `AF_VERSP`: Perform full SP-analysis. ( processor_t::verify_sp)
+- `AF_ANORET`: Perform 'no-return' analysis.
+- `AF_MEMFUNC`: Try to guess member function types.
+- `AF_TRFUNC`: Truncate functions upon code deletion.
+- `AF_STRLIT`: Create string literal if data xref exists.
+- `AF_CHKUNI`: Check for unicode strings.
+- `AF_FIXUP`: Create offsets and segments using fixup info.
+- `AF_DREFOFF`: Create offset if data xref to seg32 exists.
+- `AF_IMMOFF`: Convert 32bit instruction operand to offset.
+- `AF_DATOFF`: Automatically convert data to offsets.
+- `AF_FLIRT`: Use flirt signatures.
+- `AF_SIGCMT`: Append a signature name comment for recognized anonymous library functions.
+- `AF_SIGMLT`: Allow recognition of several copies of the same function.
+- `AF_HFLIRT`: Automatically hide library functions.
+- `AF_JFUNC`: Rename jump functions as j_...
+- `AF_NULLSUB`: Rename empty functions as nullsub_...
+- `AF_DODATA`: Coagulate data segs at the final pass.
+- `AF_DOCODE`: Coagulate code segs at the final pass.
+- `AF2_DOEH`: Handle EH information.
+- `AF2_DORTTI`: Handle RTTI information.
+- `AF2_MACRO`: Try to combine several instructions into a macro instruction
+- `AF2_MERGESTR`: Merge string literals created using data xrefs
+- `SW_SEGXRF`: show segments in xrefs?
+- `SW_XRFMRK`: show xref type marks?
+- `SW_XRFFNC`: show function offsets?
+- `SW_XRFVAL`: show xref values? (otherwise-"...")
+- `NM_REL_OFF`
+- `NM_PTR_OFF`
+- `NM_NAM_OFF`
+- `NM_REL_EA`
+- `NM_PTR_EA`
+- `NM_NAM_EA`
+- `NM_EA`
+- `NM_EA4`
+- `NM_EA8`
+- `NM_SHORT`
+- `NM_SERIAL`
+- `DEMNAM_MASK`: mask for name form
+- `DEMNAM_CMNT`: display demangled names as comments
+- `DEMNAM_NAME`: display demangled names as regular names
+- `DEMNAM_NONE`: don't display demangled names
+- `DEMNAM_GCC3`: assume gcc3 names (valid for gnu compiler)
+- `DEMNAM_FIRST`: override type info
+- `LN_NORMAL`: include normal names
+- `LN_PUBLIC`: include public names
+- `LN_AUTO`: include autogenerated names
+- `LN_WEAK`: include weak names
+- `OFLG_SHOW_VOID`: Display void marks?
+- `OFLG_SHOW_AUTO`: Display autoanalysis indicator?
+- `OFLG_GEN_NULL`: Generate empty lines?
+- `OFLG_SHOW_PREF`: Show line prefixes?
+- `OFLG_PREF_SEG`: line prefixes with segment name?
+- `OFLG_LZERO`: generate leading zeroes in numbers
+- `OFLG_GEN_ORG`: Generate 'org' directives?
+- `OFLG_GEN_ASSUME`: Generate 'assume' directives?
+- `OFLG_GEN_TRYBLKS`: Generate try/catch directives?
+- `SCF_RPTCMT`: show repeatable comments?
+- `SCF_ALLCMT`: comment all lines?
+- `SCF_NOCMT`: no comments at all
+- `SCF_LINNUM`: show source line numbers
+- `SCF_TESTMODE`: testida.idc is running
+- `SCF_SHHID_ITEM`: show hidden instructions
+- `SCF_SHHID_FUNC`: show hidden functions
+- `SCF_SHHID_SEGM`: show hidden segments
+- `LMT_THIN`: thin borders
+- `LMT_THICK`: thick borders
+- `LMT_EMPTY`: empty lines at the end of basic blocks
+- `PREF_SEGADR`: show segment addresses?
+- `PREF_FNCOFF`: show function offsets?
+- `PREF_STACK`: show stack pointer?
+- `PREF_PFXTRUNC`: truncate instruction bytes if they would need more than 1 line
+- `STRF_GEN`: generate names?
+- `STRF_AUTO`: names have 'autogenerated' bit?
+- `STRF_SERIAL`: generate serial names?
+- `STRF_UNICODE`: unicode strings are present?
+- `STRF_COMMENT`: generate auto comment for string references?
+- `STRF_SAVECASE`: preserve case of strings for identifiers
+- `ABI_8ALIGN4`: 4 byte alignment for 8byte scalars (__int64/double) inside structures?
+- `ABI_PACK_STKARGS`: do not align stack arguments to stack slots
+- `ABI_BIGARG_ALIGN`: use natural type alignment for argument if the alignment exceeds native word size. (e.g. __int64 argument should be 8byte aligned on some 32bit platforms)
+- `ABI_STACK_LDBL`: long double arguments are passed on stack
+- `ABI_STACK_VARARGS`: varargs are always passed on stack (even when there are free registers)
+- `ABI_HARD_FLOAT`: use the floating-point register set
+- `ABI_SET_BY_USER`: compiler/abi were set by user flag and require SETCOMP_BY_USER flag to be changed
+- `ABI_GCC_LAYOUT`: use gcc layout for udts (used for mingw)
+- `ABI_MAP_STKARGS`: register arguments are mapped to stack area (and consume stack slots)
+- `ABI_HUGEARG_ALIGN`: use natural type alignment for an argument even if its alignment exceeds double native word size (the default is to use double word max). e.g. if this bit is set, __int128 has 16-byte alignment. this bit is not used by ida yet
+- `INF_VERSION`
+- `INF_PROCNAME`
+- `INF_GENFLAGS`
+- `INF_LFLAGS`
+- `INF_DATABASE_CHANGE_COUNT`
+- `INF_FILETYPE`
+- `INF_OSTYPE`
+- `INF_APPTYPE`
+- `INF_ASMTYPE`
+- `INF_SPECSEGS`
+- `INF_AF`
+- `INF_AF2`
+- `INF_BASEADDR`
+- `INF_START_SS`
+- `INF_START_CS`
+- `INF_START_IP`
+- `INF_START_EA`
+- `INF_START_SP`
+- `INF_MAIN`
+- `INF_MIN_EA`
+- `INF_MAX_EA`
+- `INF_OMIN_EA`
+- `INF_OMAX_EA`
+- `INF_LOWOFF`
+- `INF_HIGHOFF`
+- `INF_MAXREF`
+- `INF_PRIVRANGE`
+- `INF_PRIVRANGE_START_EA`
+- `INF_PRIVRANGE_END_EA`
+- `INF_NETDELTA`
+- `INF_XREFNUM`
+- `INF_TYPE_XREFNUM`
+- `INF_REFCMTNUM`
+- `INF_XREFFLAG`
+- `INF_MAX_AUTONAME_LEN`
+- `INF_NAMETYPE`
+- `INF_SHORT_DEMNAMES`
+- `INF_LONG_DEMNAMES`
+- `INF_DEMNAMES`
+- `INF_LISTNAMES`
+- `INF_INDENT`
+- `INF_CMT_INDENT`
+- `INF_MARGIN`
+- `INF_LENXREF`
+- `INF_OUTFLAGS`
+- `INF_CMTFLG`
+- `INF_LIMITER`
+- `INF_BIN_PREFIX_SIZE`
+- `INF_PREFFLAG`
+- `INF_STRLIT_FLAGS`
+- `INF_STRLIT_BREAK`
+- `INF_STRLIT_ZEROES`
+- `INF_STRTYPE`
+- `INF_STRLIT_PREF`
+- `INF_STRLIT_SERNUM`
+- `INF_DATATYPES`
+- `INF_OBSOLETE_CC`
+- `INF_CC_ID`
+- `INF_CC_CM`
+- `INF_CC_SIZE_I`
+- `INF_CC_SIZE_B`
+- `INF_CC_SIZE_E`
+- `INF_CC_DEFALIGN`
+- `INF_CC_SIZE_S`
+- `INF_CC_SIZE_L`
+- `INF_CC_SIZE_LL`
+- `INF_CC_SIZE_LDBL`
+- `INF_ABIBITS`
+- `INF_APPCALL_OPTIONS`
+- `INF_FILE_FORMAT_NAME`: file format name for loader modules
+- `INF_GROUPS`: segment group information (see init_groups())
+- `INF_H_PATH`: C header path.
+- `INF_C_MACROS`: C predefined macros.
+- `INF_INCLUDE`: assembler include file name
+- `INF_DUALOP_GRAPH`: Graph text representation options.
+- `INF_DUALOP_TEXT`: Text text representation options.
+- `INF_MD5`: MD5 of the input file.
+- `INF_IDA_VERSION`: version of ida which created the database
+- `INF_STR_ENCODINGS`: a list of encodings for the program strings
+- `INF_DBG_BINPATHS`: unused (20 indexes)
+- `INF_SHA256`: SHA256 of the input file.
+- `INF_ABINAME`: ABI name (processor specific)
+- `INF_ARCHIVE_PATH`: archive file path
+- `INF_PROBLEMS`: problem lists
+- `INF_SELECTORS`: 2..63 are for selector_t blob (see init_selectors())
+- `INF_NOTEPAD`: notepad blob, occupies 1000 indexes (1MB of text)
+- `INF_SRCDBG_PATHS`: source debug paths, occupies 20 indexes
+- `INF_SRCDBG_UNDESIRED`: user-closed source files, occupies 20 indexes
+- `INF_INITIAL_VERSION`: initial version of database
+- `INF_CTIME`: database creation timestamp
+- `INF_ELAPSED`: seconds database stayed open
+- `INF_NOPENS`: how many times the database is opened
+- `INF_CRC32`: input file crc32
+- `INF_IMAGEBASE`: image base
+- `INF_IDSNODE`: ids modnode id (for import_module)
+- `INF_FSIZE`: input file size
+- `INF_OUTFILEENC`: output file encoding index
+- `INF_INPUT_FILE_PATH`
+- `INF_COMPILER_INFO`
+- `INF_CALLCNV`
+- `INF_LAST`
+- `UA_MAXOP`: max number of operands allowed for an instruction
+- `IDB_EXT32`
+- `IDB_EXT64`
+- `IDB_EXT`
+- `VLD_AUTO_REPAIR`: automatically repair the database
+- `VLD_DIALOG`: ask user to repair (this bit is mutually exclusive with VLD_AUTO_REPAIR)
+- `VLD_SILENT`: no messages to the output window
+- `IDI_STRUCFLD`: structure field (opposite to IDI_NODEVAL)
+- `IDI_ALTVAL`: netnode: altval
+- `IDI_SUPVAL`: netnode: supval
+- `IDI_VALOBJ`: netnode: valobj
+- `IDI_BLOB`: netnode: blob
+- `IDI_SCALAR`: scalar value (default)
+- `IDI_CSTR`: string
+- `IDI_QSTRING`: qstring
+- `IDI_BYTEARRAY`: byte array: binary representation
+- `IDI_EA_HEX`: default representation: hex or "BADADDR"
+- `IDI_DEC`: show as decimal
+- `IDI_HEX`: show as hexadecimal
+- `IDI_INC`: stored value is incremented (scalars only)
+- `IDI_MAP_VAL`: apply ea2node() to value
+- `IDI_HASH`: hashed node field, hash name in offset
+- `IDI_HLPSTRUC`: call helper for pointer to structure
+- `IDI_READONLY`: read-only field (cannot be modified)
+- `IDI_BITMAP`: bitmap field: interpret bitmask as bit number
+- `IDI_ONOFF`: show boolean as on/off (not true/false)
+- `IDI_NOMERGE`: field should not be merged as part of INF
+- `IDI_NODEVAL`
+- `IDI_BUFVAR`
+- `idainfo_big_arg_align`
+- `idainfo_gen_null`
+- `idainfo_set_gen_null`
+- `idainfo_gen_lzero`
+- `idainfo_set_gen_lzero`
+- `idainfo_gen_tryblks`
+- `idainfo_set_gen_tryblks`
+- `idainfo_get_demname_form`
+- `idainfo_get_pack_mode`
+- `idainfo_set_pack_mode`
+- `idainfo_is_64bit`
+- `idainfo_set_64bit`
+- `idainfo_is_auto_enabled`
+- `idainfo_set_auto_enabled`
+- `idainfo_is_be`
+- `idainfo_set_be`
+- `idainfo_is_dll`
+- `idainfo_is_flat_off32`
+- `idainfo_is_graph_view`
+- `idainfo_set_graph_view`
+- `idainfo_is_hard_float`
+- `idainfo_is_kernel_mode`
+- `idainfo_is_mem_aligned4`
+- `idainfo_is_snapshot`
+- `idainfo_is_wide_high_byte_first`
+- `idainfo_set_wide_high_byte_first`
+- `idainfo_like_binary`
+- `idainfo_line_pref_with_seg`
+- `idainfo_set_line_pref_with_seg`
+- `idainfo_show_auto`
+- `idainfo_set_show_auto`
+- `idainfo_show_line_pref`
+- `idainfo_set_show_line_pref`
+- `idainfo_show_void`
+- `idainfo_set_show_void`
+- `idainfo_loading_idc`
+- `idainfo_map_stkargs`
+- `idainfo_pack_stkargs`
+- `idainfo_readonly_idb`
+- `idainfo_set_store_user_info`
+- `idainfo_stack_ldbl`
+- `idainfo_stack_varargs`
+- `idainfo_use_allasm`
+- `idainfo_use_gcc_layout`
+- `macros_enabled`
+- `should_create_stkvars`
+- `should_trace_sp`
+- `show_all_comments`
+- `show_comments`
+- `show_repeatables`
+- `inf_get_comment`
+- `inf_set_comment`
+- `idainfo_comment_get`
+- `idainfo_comment_set`
+
+## Classes Overview
+
+- `compiler_info_t`
+- `idainfo`
+- `idbattr_valmap_t`
+- `idbattr_info_t`
+
+## Functions Overview
+
+- `is_filetype_like_binary(ft: filetype_t) -> bool`: Is unstructured input file?
+- `getinf_str(tag: inftag_t) -> str`: Get program specific information (a non-scalar value)
+- `delinf(tag: inftag_t) -> bool`: Undefine a program specific information
+- `inf_get_version() -> ushort`
+- `inf_set_version(_v: ushort) -> bool`
+- `inf_get_genflags() -> ushort`
+- `inf_set_genflags(_v: ushort) -> bool`
+- `inf_is_auto_enabled() -> bool`
+- `inf_set_auto_enabled(_v: bool = True) -> bool`
+- `inf_use_allasm() -> bool`
+- `inf_set_use_allasm(_v: bool = True) -> bool`
+- `inf_loading_idc() -> bool`
+- `inf_set_loading_idc(_v: bool = True) -> bool`
+- `inf_no_store_user_info() -> bool`
+- `inf_set_no_store_user_info(_v: bool = True) -> bool`
+- `inf_readonly_idb() -> bool`
+- `inf_set_readonly_idb(_v: bool = True) -> bool`
+- `inf_check_manual_ops() -> bool`
+- `inf_set_check_manual_ops(_v: bool = True) -> bool`
+- `inf_allow_non_matched_ops() -> bool`
+- `inf_set_allow_non_matched_ops(_v: bool = True) -> bool`
+- `inf_is_graph_view() -> bool`
+- `inf_set_graph_view(_v: bool = True) -> bool`
+- `inf_get_lflags() -> int`
+- `inf_set_lflags(_v: int) -> bool`
+- `inf_decode_fpp() -> bool`
+- `inf_set_decode_fpp(_v: bool = True) -> bool`
+- `inf_is_32bit_or_higher() -> bool`
+- `inf_is_32bit_exactly() -> bool`
+- `inf_set_32bit(_v: bool = True) -> bool`
+- `inf_is_16bit() -> bool`
+- `inf_is_64bit() -> bool`
+- `inf_set_64bit(_v: bool = True) -> bool`
+- `inf_is_ilp32() -> bool`
+- `inf_set_ilp32(_v: bool = True) -> bool`
+- `inf_is_dll() -> bool`
+- `inf_set_dll(_v: bool = True) -> bool`
+- `inf_is_flat_off32() -> bool`
+- `inf_set_flat_off32(_v: bool = True) -> bool`
+- `inf_is_be() -> bool`
+- `inf_set_be(_v: bool = True) -> bool`
+- `inf_is_wide_high_byte_first() -> bool`
+- `inf_set_wide_high_byte_first(_v: bool = True) -> bool`
+- `inf_dbg_no_store_path() -> bool`
+- `inf_set_dbg_no_store_path(_v: bool = True) -> bool`
+- `inf_is_snapshot() -> bool`
+- `inf_set_snapshot(_v: bool = True) -> bool`
+- `inf_pack_idb() -> bool`
+- `inf_set_pack_idb(_v: bool = True) -> bool`
+- `inf_compress_idb() -> bool`
+- `inf_set_compress_idb(_v: bool = True) -> bool`
+- `inf_is_kernel_mode() -> bool`
+- `inf_set_kernel_mode(_v: bool = True) -> bool`
+- `inf_get_app_bitness() -> uint`
+- `inf_set_app_bitness(bitness: uint) -> None`
+- `inf_get_database_change_count() -> int`
+- `inf_set_database_change_count(_v: int) -> bool`
+- `inf_get_filetype() -> filetype_t`
+- `inf_set_filetype(_v: filetype_t) -> bool`
+- `inf_get_ostype() -> ushort`
+- `inf_set_ostype(_v: ushort) -> bool`
+- `inf_get_apptype() -> ushort`
+- `inf_set_apptype(_v: ushort) -> bool`
+- `inf_get_asmtype() -> uchar`
+- `inf_set_asmtype(_v: uchar) -> bool`
+- `inf_get_specsegs() -> uchar`
+- `inf_set_specsegs(_v: uchar) -> bool`
+- `inf_get_af() -> int`
+- `inf_set_af(_v: int) -> bool`
+- `inf_trace_flow() -> bool`
+- `inf_set_trace_flow(_v: bool = True) -> bool`
+- `inf_mark_code() -> bool`
+- `inf_set_mark_code(_v: bool = True) -> bool`
+- `inf_create_jump_tables() -> bool`
+- `inf_set_create_jump_tables(_v: bool = True) -> bool`
+- `inf_noflow_to_data() -> bool`
+- `inf_set_noflow_to_data(_v: bool = True) -> bool`
+- `inf_create_all_xrefs() -> bool`
+- `inf_set_create_all_xrefs(_v: bool = True) -> bool`
+- `inf_del_no_xref_insns() -> bool`
+- `inf_set_del_no_xref_insns(_v: bool = True) -> bool`
+- `inf_create_func_from_ptr() -> bool`
+- `inf_set_create_func_from_ptr(_v: bool = True) -> bool`
+- `inf_create_func_from_call() -> bool`
+- `inf_set_create_func_from_call(_v: bool = True) -> bool`
+- `inf_create_func_tails() -> bool`
+- `inf_set_create_func_tails(_v: bool = True) -> bool`
+- `inf_should_create_stkvars() -> bool`
+- `inf_set_should_create_stkvars(_v: bool = True) -> bool`
+- `inf_propagate_stkargs() -> bool`
+- `inf_set_propagate_stkargs(_v: bool = True) -> bool`
+- `inf_propagate_regargs() -> bool`
+- `inf_set_propagate_regargs(_v: bool = True) -> bool`
+- `inf_should_trace_sp() -> bool`
+- `inf_set_should_trace_sp(_v: bool = True) -> bool`
+- `inf_full_sp_ana() -> bool`
+- `inf_set_full_sp_ana(_v: bool = True) -> bool`
+- `inf_noret_ana() -> bool`
+- `inf_set_noret_ana(_v: bool = True) -> bool`
+- `inf_guess_func_type() -> bool`
+- `inf_set_guess_func_type(_v: bool = True) -> bool`
+- `inf_truncate_on_del() -> bool`
+- `inf_set_truncate_on_del(_v: bool = True) -> bool`
+- `inf_create_strlit_on_xref() -> bool`
+- `inf_set_create_strlit_on_xref(_v: bool = True) -> bool`
+- `inf_check_unicode_strlits() -> bool`
+- `inf_set_check_unicode_strlits(_v: bool = True) -> bool`
+- `inf_create_off_using_fixup() -> bool`
+- `inf_set_create_off_using_fixup(_v: bool = True) -> bool`
+- `inf_create_off_on_dref() -> bool`
+- `inf_set_create_off_on_dref(_v: bool = True) -> bool`
+- `inf_op_offset() -> bool`
+- `inf_set_op_offset(_v: bool = True) -> bool`
+- `inf_data_offset() -> bool`
+- `inf_set_data_offset(_v: bool = True) -> bool`
+- `inf_use_flirt() -> bool`
+- `inf_set_use_flirt(_v: bool = True) -> bool`
+- `inf_append_sigcmt() -> bool`
+- `inf_set_append_sigcmt(_v: bool = True) -> bool`
+- `inf_allow_sigmulti() -> bool`
+- `inf_set_allow_sigmulti(_v: bool = True) -> bool`
+- `inf_hide_libfuncs() -> bool`
+- `inf_set_hide_libfuncs(_v: bool = True) -> bool`
+- `inf_rename_jumpfunc() -> bool`
+- `inf_set_rename_jumpfunc(_v: bool = True) -> bool`
+- `inf_rename_nullsub() -> bool`
+- `inf_set_rename_nullsub(_v: bool = True) -> bool`
+- `inf_coagulate_data() -> bool`
+- `inf_set_coagulate_data(_v: bool = True) -> bool`
+- `inf_coagulate_code() -> bool`
+- `inf_set_coagulate_code(_v: bool = True) -> bool`
+- `inf_final_pass() -> bool`
+- `inf_set_final_pass(_v: bool = True) -> bool`
+- `inf_get_af2() -> int`
+- `inf_set_af2(_v: int) -> bool`
+- `inf_handle_eh() -> bool`
+- `inf_set_handle_eh(_v: bool = True) -> bool`
+- `inf_handle_rtti() -> bool`
+- `inf_set_handle_rtti(_v: bool = True) -> bool`
+- `inf_macros_enabled() -> bool`
+- `inf_set_macros_enabled(_v: bool = True) -> bool`
+- `inf_merge_strlits() -> bool`
+- `inf_set_merge_strlits(_v: bool = True) -> bool`
+- `inf_get_baseaddr() -> int`
+- `inf_set_baseaddr(_v: int) -> bool`
+- `inf_get_start_ss() -> sel_t`
+- `inf_set_start_ss(_v: sel_t) -> bool`
+- `inf_get_start_cs() -> sel_t`
+- `inf_set_start_cs(_v: sel_t) -> bool`
+- `inf_get_start_ip() -> ida_idaapi.ea_t`
+- `inf_set_start_ip(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_start_ea() -> ida_idaapi.ea_t`
+- `inf_set_start_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_start_sp() -> ida_idaapi.ea_t`
+- `inf_set_start_sp(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_main() -> ida_idaapi.ea_t`
+- `inf_set_main(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_min_ea() -> ida_idaapi.ea_t`
+- `inf_set_min_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_max_ea() -> ida_idaapi.ea_t`
+- `inf_set_max_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_omin_ea() -> ida_idaapi.ea_t`
+- `inf_set_omin_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_omax_ea() -> ida_idaapi.ea_t`
+- `inf_set_omax_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_lowoff() -> ida_idaapi.ea_t`
+- `inf_set_lowoff(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_highoff() -> ida_idaapi.ea_t`
+- `inf_set_highoff(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_maxref() -> int`
+- `inf_set_maxref(_v: int) -> bool`
+- `inf_get_netdelta() -> int`
+- `inf_set_netdelta(_v: int) -> bool`
+- `inf_get_xrefnum() -> uchar`
+- `inf_set_xrefnum(_v: uchar) -> bool`
+- `inf_get_type_xrefnum() -> uchar`
+- `inf_set_type_xrefnum(_v: uchar) -> bool`
+- `inf_get_refcmtnum() -> uchar`
+- `inf_set_refcmtnum(_v: uchar) -> bool`
+- `inf_get_xrefflag() -> uchar`
+- `inf_set_xrefflag(_v: uchar) -> bool`
+- `inf_show_xref_seg() -> bool`
+- `inf_set_show_xref_seg(_v: bool = True) -> bool`
+- `inf_show_xref_tmarks() -> bool`
+- `inf_set_show_xref_tmarks(_v: bool = True) -> bool`
+- `inf_show_xref_fncoff() -> bool`
+- `inf_set_show_xref_fncoff(_v: bool = True) -> bool`
+- `inf_show_xref_val() -> bool`
+- `inf_set_show_xref_val(_v: bool = True) -> bool`
+- `inf_get_max_autoname_len() -> ushort`
+- `inf_set_max_autoname_len(_v: ushort) -> bool`
+- `inf_get_nametype() -> char`
+- `inf_set_nametype(_v: char) -> bool`
+- `inf_get_short_demnames() -> int`
+- `inf_set_short_demnames(_v: int) -> bool`
+- `inf_get_long_demnames() -> int`
+- `inf_set_long_demnames(_v: int) -> bool`
+- `inf_get_demnames() -> uchar`
+- `inf_set_demnames(_v: uchar) -> bool`
+- `inf_get_listnames() -> uchar`
+- `inf_set_listnames(_v: uchar) -> bool`
+- `inf_get_indent() -> uchar`
+- `inf_set_indent(_v: uchar) -> bool`
+- `inf_get_cmt_indent() -> uchar`
+- `inf_set_cmt_indent(_v: uchar) -> bool`
+- `inf_get_margin() -> ushort`
+- `inf_set_margin(_v: ushort) -> bool`
+- `inf_get_lenxref() -> ushort`
+- `inf_set_lenxref(_v: ushort) -> bool`
+- `inf_get_outflags() -> int`
+- `inf_set_outflags(_v: int) -> bool`
+- `inf_show_void() -> bool`
+- `inf_set_show_void(_v: bool = True) -> bool`
+- `inf_show_auto() -> bool`
+- `inf_set_show_auto(_v: bool = True) -> bool`
+- `inf_gen_null() -> bool`
+- `inf_set_gen_null(_v: bool = True) -> bool`
+- `inf_show_line_pref() -> bool`
+- `inf_set_show_line_pref(_v: bool = True) -> bool`
+- `inf_line_pref_with_seg() -> bool`
+- `inf_set_line_pref_with_seg(_v: bool = True) -> bool`
+- `inf_gen_lzero() -> bool`
+- `inf_set_gen_lzero(_v: bool = True) -> bool`
+- `inf_gen_org() -> bool`
+- `inf_set_gen_org(_v: bool = True) -> bool`
+- `inf_gen_assume() -> bool`
+- `inf_set_gen_assume(_v: bool = True) -> bool`
+- `inf_gen_tryblks() -> bool`
+- `inf_set_gen_tryblks(_v: bool = True) -> bool`
+- `inf_get_cmtflg() -> uchar`
+- `inf_set_cmtflg(_v: uchar) -> bool`
+- `inf_show_repeatables() -> bool`
+- `inf_set_show_repeatables(_v: bool = True) -> bool`
+- `inf_show_all_comments() -> bool`
+- `inf_set_show_all_comments(_v: bool = True) -> bool`
+- `inf_hide_comments() -> bool`
+- `inf_set_hide_comments(_v: bool = True) -> bool`
+- `inf_show_src_linnum() -> bool`
+- `inf_set_show_src_linnum(_v: bool = True) -> bool`
+- `inf_test_mode() -> bool`
+- `inf_show_hidden_insns() -> bool`
+- `inf_set_show_hidden_insns(_v: bool = True) -> bool`
+- `inf_show_hidden_funcs() -> bool`
+- `inf_set_show_hidden_funcs(_v: bool = True) -> bool`
+- `inf_show_hidden_segms() -> bool`
+- `inf_set_show_hidden_segms(_v: bool = True) -> bool`
+- `inf_get_limiter() -> uchar`
+- `inf_set_limiter(_v: uchar) -> bool`
+- `inf_is_limiter_thin() -> bool`
+- `inf_set_limiter_thin(_v: bool = True) -> bool`
+- `inf_is_limiter_thick() -> bool`
+- `inf_set_limiter_thick(_v: bool = True) -> bool`
+- `inf_is_limiter_empty() -> bool`
+- `inf_set_limiter_empty(_v: bool = True) -> bool`
+- `inf_get_bin_prefix_size() -> short`
+- `inf_set_bin_prefix_size(_v: short) -> bool`
+- `inf_get_prefflag() -> uchar`
+- `inf_set_prefflag(_v: uchar) -> bool`
+- `inf_prefix_show_segaddr() -> bool`
+- `inf_set_prefix_show_segaddr(_v: bool = True) -> bool`
+- `inf_prefix_show_funcoff() -> bool`
+- `inf_set_prefix_show_funcoff(_v: bool = True) -> bool`
+- `inf_prefix_show_stack() -> bool`
+- `inf_set_prefix_show_stack(_v: bool = True) -> bool`
+- `inf_prefix_truncate_opcode_bytes() -> bool`
+- `inf_set_prefix_truncate_opcode_bytes(_v: bool = True) -> bool`
+- `inf_get_strlit_flags() -> uchar`
+- `inf_set_strlit_flags(_v: uchar) -> bool`
+- `inf_strlit_names() -> bool`
+- `inf_set_strlit_names(_v: bool = True) -> bool`
+- `inf_strlit_name_bit() -> bool`
+- `inf_set_strlit_name_bit(_v: bool = True) -> bool`
+- `inf_strlit_serial_names() -> bool`
+- `inf_set_strlit_serial_names(_v: bool = True) -> bool`
+- `inf_unicode_strlits() -> bool`
+- `inf_set_unicode_strlits(_v: bool = True) -> bool`
+- `inf_strlit_autocmt() -> bool`
+- `inf_set_strlit_autocmt(_v: bool = True) -> bool`
+- `inf_strlit_savecase() -> bool`
+- `inf_set_strlit_savecase(_v: bool = True) -> bool`
+- `inf_get_strlit_break() -> uchar`
+- `inf_set_strlit_break(_v: uchar) -> bool`
+- `inf_get_strlit_zeroes() -> char`
+- `inf_set_strlit_zeroes(_v: char) -> bool`
+- `inf_get_strtype() -> int`
+- `inf_set_strtype(_v: int) -> bool`
+- `inf_get_strlit_sernum() -> int`
+- `inf_set_strlit_sernum(_v: int) -> bool`
+- `inf_get_datatypes() -> int`
+- `inf_set_datatypes(_v: int) -> bool`
+- `inf_get_abibits() -> int`
+- `inf_set_abibits(_v: int) -> bool`
+- `inf_is_mem_aligned4() -> bool`
+- `inf_set_mem_aligned4(_v: bool = True) -> bool`
+- `inf_pack_stkargs(*args) -> bool`
+- `inf_set_pack_stkargs(_v: bool = True) -> bool`
+- `inf_big_arg_align(*args) -> bool`
+- `inf_set_big_arg_align(_v: bool = True) -> bool`
+- `inf_stack_ldbl() -> bool`
+- `inf_set_stack_ldbl(_v: bool = True) -> bool`
+- `inf_stack_varargs() -> bool`
+- `inf_set_stack_varargs(_v: bool = True) -> bool`
+- `inf_is_hard_float() -> bool`
+- `inf_set_hard_float(_v: bool = True) -> bool`
+- `inf_abi_set_by_user() -> bool`
+- `inf_set_abi_set_by_user(_v: bool = True) -> bool`
+- `inf_use_gcc_layout() -> bool`
+- `inf_set_use_gcc_layout(_v: bool = True) -> bool`
+- `inf_map_stkargs() -> bool`
+- `inf_set_map_stkargs(_v: bool = True) -> bool`
+- `inf_huge_arg_align(*args) -> bool`
+- `inf_set_huge_arg_align(_v: bool = True) -> bool`
+- `inf_get_appcall_options() -> int`
+- `inf_set_appcall_options(_v: int) -> bool`
+- `inf_get_privrange_start_ea() -> ida_idaapi.ea_t`
+- `inf_set_privrange_start_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_privrange_end_ea() -> ida_idaapi.ea_t`
+- `inf_set_privrange_end_ea(_v: ida_idaapi.ea_t) -> bool`
+- `inf_get_cc_id() -> comp_t`
+- `inf_set_cc_id(_v: comp_t) -> bool`
+- `inf_get_cc_cm() -> cm_t`
+- `inf_set_cc_cm(_v: cm_t) -> bool`
+- `inf_get_callcnv() -> callcnv_t`
+- `inf_set_callcnv(_v: callcnv_t) -> bool`
+- `inf_get_cc_size_i() -> uchar`
+- `inf_set_cc_size_i(_v: uchar) -> bool`
+- `inf_get_cc_size_b() -> uchar`
+- `inf_set_cc_size_b(_v: uchar) -> bool`
+- `inf_get_cc_size_e() -> uchar`
+- `inf_set_cc_size_e(_v: uchar) -> bool`
+- `inf_get_cc_defalign() -> uchar`
+- `inf_set_cc_defalign(_v: uchar) -> bool`
+- `inf_get_cc_size_s() -> uchar`
+- `inf_set_cc_size_s(_v: uchar) -> bool`
+- `inf_get_cc_size_l() -> uchar`
+- `inf_set_cc_size_l(_v: uchar) -> bool`
+- `inf_get_cc_size_ll() -> uchar`
+- `inf_set_cc_size_ll(_v: uchar) -> bool`
+- `inf_get_cc_size_ldbl() -> uchar`
+- `inf_set_cc_size_ldbl(_v: uchar) -> bool`
+- `inf_get_procname() -> str`
+- `inf_set_procname(*args) -> bool`
+- `inf_get_strlit_pref() -> str`
+- `inf_set_strlit_pref(*args) -> bool`
+- `inf_get_cc(out: compiler_info_t) -> bool`
+- `inf_set_cc(_v: compiler_info_t) -> bool`
+- `inf_set_privrange(_v: range_t) -> bool`
+- `inf_get_privrange(*args) -> range_t`: This function has the following signatures:
+- `inf_get_af_low() -> ushort`: Get/set low/high 16bit halves of inf.af.
+- `inf_set_af_low(saf: ushort) -> None`
+- `inf_get_af_high() -> ushort`
+- `inf_set_af_high(saf2: ushort) -> None`
+- `inf_get_af2_low() -> ushort`: Get/set low 16bit half of inf.af2.
+- `inf_set_af2_low(saf: ushort) -> None`
+- `inf_get_pack_mode() -> int`
+- `inf_set_pack_mode(pack_mode: int) -> int`
+- `inf_inc_database_change_count(cnt: int = 1) -> None`
+- `inf_get_demname_form() -> uchar`: Get DEMNAM_MASK bits of #demnames.
+- `inf_postinc_strlit_sernum(cnt: int = 1) -> int`
+- `inf_like_binary() -> bool`
+- `calc_default_idaplace_flags() -> int`: Get default disassembly line options.
+- `to_ea(reg_cs: sel_t, reg_ip: int) -> ida_idaapi.ea_t`: Convert (sel,off) value to a linear address.
+- `get_dbctx_id() -> ssize_t`: Get the current database context ID
+- `get_dbctx_qty() -> size_t`: Get number of database contexts
+- `switch_dbctx(idx: size_t) -> dbctx_t *`: Switch to the database with the provided context ID
+- `is_database_busy() -> bool`: Check if the database is busy (e.g. performing some critical operations and cannot be safely accessed)
+- `validate_idb(vld_flags: int = 0) -> size_t`: Validate the database
+- `move_privrange(new_privrange_start: ida_idaapi.ea_t) -> bool`: Move privrange to the specified address
+- `idainfo_is_32bit()`

@@ -1,0 +1,480 @@
+# ida_nalt
+
+Definitions of various information kept in netnodes.
+
+Each address in the program has a corresponding netnode: netnode(ea).
+If we have no information about an address, the corresponding netnode is not created. Otherwise we will create a netnode and save information in it. All variable length information (names, comments, offset information, etc) is stored in the netnode.
+Dont forget that some information is already stored in the flags (bytes.hpp)
+netnode.
+
+## Constants
+
+- `NALT_SWITCH`: switch idiom address (used at jump targets)
+- `NALT_STRUCT`: struct id
+- `NALT_AFLAGS`: additional flags for an item
+- `NALT_LINNUM`: source line number
+- `NALT_ABSBASE`: absolute segment location
+- `NALT_ENUM0`: enum id for the first operand
+- `NALT_ENUM1`: enum id for the second operand
+- `NALT_PURGE`: number of bytes purged from the stack when a function is called indirectly
+- `NALT_STRTYPE`: type of string item
+- `NALT_ALIGN`: alignment value if the item is FF_ALIGN (should by equal to power of 2)
+- `NALT_COLOR`: instruction/data background color
+- `NSUP_CMT`: regular comment
+- `NSUP_REPCMT`: repeatable comment
+- `NSUP_FOP1`: forced operand 1
+- `NSUP_FOP2`: forced operand 2
+- `NSUP_JINFO`: jump table info
+- `NSUP_ARRAY`: array parameters
+- `NSUP_OMFGRP`: OMF: group of segments (not used anymore)
+- `NSUP_FOP3`: forced operand 3
+- `NSUP_SWITCH`: switch information
+- `NSUP_REF0`: complex reference information for operand 1
+- `NSUP_REF1`: complex reference information for operand 2
+- `NSUP_REF2`: complex reference information for operand 3
+- `NSUP_OREF0`: outer complex reference information for operand 1
+- `NSUP_OREF1`: outer complex reference information for operand 2
+- `NSUP_OREF2`: outer complex reference information for operand 3
+- `NSUP_STROFF0`: stroff: struct path for the first operand
+- `NSUP_STROFF1`: stroff: struct path for the second operand
+- `NSUP_SEGTRANS`: segment translations
+- `NSUP_FOP4`: forced operand 4
+- `NSUP_FOP5`: forced operand 5
+- `NSUP_FOP6`: forced operand 6
+- `NSUP_REF3`: complex reference information for operand 4
+- `NSUP_REF4`: complex reference information for operand 5
+- `NSUP_REF5`: complex reference information for operand 6
+- `NSUP_OREF3`: outer complex reference information for operand 4
+- `NSUP_OREF4`: outer complex reference information for operand 5
+- `NSUP_OREF5`: outer complex reference information for operand 6
+- `NSUP_XREFPOS`: saved xref address and type in the xrefs window
+- `NSUP_CUSTDT`: custom data type id
+- `NSUP_GROUPS`: SEG_GRP: pack_dd encoded list of selectors.
+- `NSUP_ARGEAS`: instructions that initialize call arguments
+- `NSUP_FOP7`: forced operand 7
+- `NSUP_FOP8`: forced operand 8
+- `NSUP_REF6`: complex reference information for operand 7
+- `NSUP_REF7`: complex reference information for operand 8
+- `NSUP_OREF6`: outer complex reference information for operand 7
+- `NSUP_OREF7`: outer complex reference information for operand 8
+- `NSUP_EX_FLAGS`: Extended flags.
+- `NSUP_POINTS`: SP change points blob (see funcs.cpp). values NSUP_POINTS..NSUP_POINTS+0x1000 are reserved
+- `NSUP_MANUAL`: manual instruction. values NSUP_MANUAL..NSUP_MANUAL+0x1000 are reserved
+- `NSUP_TYPEINFO`: type information. values NSUP_TYPEINFO..NSUP_TYPEINFO+0x1000 are reserved
+- `NSUP_REGVAR`: register variables. values NSUP_REGVAR..NSUP_REGVAR+0x1000 are reserved
+- `NSUP_LLABEL`: local labels. values NSUP_LLABEL..NSUP_LLABEL+0x1000 are reserved
+- `NSUP_REGARG`: register argument type/name descriptions values NSUP_REGARG..NSUP_REGARG+0x1000 are reserved
+- `NSUP_FTAILS`: function tails or tail referers values NSUP_FTAILS..NSUP_FTAILS+0x1000 are reserved
+- `NSUP_GROUP`: graph group information values NSUP_GROUP..NSUP_GROUP+0x1000 are reserved
+- `NSUP_OPTYPES`: operand type information. values NSUP_OPTYPES..NSUP_OPTYPES+0x100000 are reserved
+- `NSUP_ORIGFMD`: function metadata before lumina information was applied values NSUP_ORIGFMD..NSUP_ORIGFMD+0x1000 are reserved
+- `NSUP_FRAME`: function frame type values NSUP_FRAME..NSUP_FRAME+0x10000 are reserved
+- `NALT_CREF_TO`: code xref to, idx: target address
+- `NALT_CREF_FROM`: code xref from, idx: source address
+- `NALT_DREF_TO`: data xref to, idx: target address
+- `NALT_DREF_FROM`: data xref from, idx: source address
+- `NSUP_GR_INFO`: group node info: color, ea, text
+- `NALT_GR_LAYX`: group layout ptrs, hash: md5 of 'belongs'
+- `NSUP_GR_LAYT`: group layouts, idx: layout pointer
+- `PATCH_TAG`: Patch netnode tag.
+- `IDB_DESKTOPS_NODE_NAME`: hash indexed by desktop name with dekstop netnode
+- `IDB_DESKTOPS_TAG`: tag to store desktop blob & timestamp
+- `AFL_LINNUM`: has line number info
+- `AFL_USERSP`: user-defined SP value
+- `AFL_PUBNAM`: name is public (inter-file linkage)
+- `AFL_WEAKNAM`: name is weak
+- `AFL_HIDDEN`: the item is hidden completely
+- `AFL_MANUAL`: the instruction/data is specified by the user
+- `AFL_NOBRD`: the code/data border is hidden
+- `AFL_ZSTROFF`: display struct field name at 0 offset when displaying an offset. example: `offset somestruct.field_0 ` if this flag is clear, then `offset somestruct `
+- `AFL_BNOT0`: the 1st operand is bitwise negated
+- `AFL_BNOT1`: the 2nd operand is bitwise negated
+- `AFL_LIB`: item from the standard library. low level flag, is used to set FUNC_LIB of func_t
+- `AFL_TI`: has typeinfo? (NSUP_TYPEINFO); used only for addresses, not for member_t
+- `AFL_TI0`: has typeinfo for operand 0? (NSUP_OPTYPES)
+- `AFL_TI1`: has typeinfo for operand 1? (NSUP_OPTYPES+1)
+- `AFL_LNAME`: has local name too (FF_NAME should be set)
+- `AFL_TILCMT`: has type comment? (such a comment may be changed by IDA)
+- `AFL_LZERO0`: toggle leading zeroes for the 1st operand
+- `AFL_LZERO1`: toggle leading zeroes for the 2nd operand
+- `AFL_COLORED`: has user defined instruction color?
+- `AFL_TERSESTR`: terse structure variable display?
+- `AFL_SIGN0`: code: toggle sign of the 1st operand
+- `AFL_SIGN1`: code: toggle sign of the 2nd operand
+- `AFL_NORET`: for imported function pointers: doesn't return. this flag can also be used for any instruction which halts or finishes the program execution
+- `AFL_FIXEDSPD`: sp delta value is fixed by analysis. should not be modified by modules
+- `AFL_ALIGNFLOW`: the previous insn was created for alignment purposes only
+- `AFL_USERTI`: the type information is definitive. (comes from the user or type library) if not set see AFL_TYPE_GUESSED
+- `AFL_RETFP`: function returns a floating point value
+- `AFL_USEMODSP`: insn modifes SP and uses the modified value; example: pop [rsp+N]
+- `AFL_NOTCODE`: autoanalysis should not create code here
+- `AFL_NOTPROC`: autoanalysis should not create proc here
+- `AFL_TYPE_GUESSED`: who guessed the type information?
+- `AFL_IDA_GUESSED`: the type is guessed by IDA
+- `AFL_HR_GUESSED_FUNC`: the function type is guessed by the decompiler
+- `AFL_HR_GUESSED_DATA`: the data type is guessed by the decompiler
+- `AFL_HR_DETERMINED`: the type is definitely guessed by the decompiler
+- `STRWIDTH_1B`
+- `STRWIDTH_2B`
+- `STRWIDTH_4B`
+- `STRWIDTH_MASK`
+- `STRLYT_TERMCHR`
+- `STRLYT_PASCAL1`
+- `STRLYT_PASCAL2`
+- `STRLYT_PASCAL4`
+- `STRLYT_MASK`
+- `STRLYT_SHIFT`
+- `STRTYPE_TERMCHR`: C-style string.
+- `STRTYPE_C`: Zero-terminated 16bit chars.
+- `STRTYPE_C_16`: Zero-terminated 32bit chars.
+- `STRTYPE_C_32`: Pascal-style, one-byte length prefix.
+- `STRTYPE_PASCAL`: Pascal-style, 16bit chars, one-byte length prefix.
+- `STRTYPE_PASCAL_16`: Pascal-style, 32bit chars, one-byte length prefix.
+- `STRTYPE_PASCAL_32`: Pascal-style, two-byte length prefix.
+- `STRTYPE_LEN2`: Pascal-style, 16bit chars, two-byte length prefix.
+- `STRTYPE_LEN2_16`: Pascal-style, 32bit chars, two-byte length prefix.
+- `STRTYPE_LEN2_32`: Pascal-style, four-byte length prefix.
+- `STRTYPE_LEN4`: Pascal-style, 16bit chars, four-byte length prefix.
+- `STRTYPE_LEN4_16`: Pascal-style, 32bit chars, four-byte length prefix.
+- `STRTYPE_LEN4_32`
+- `STRENC_DEFAULT`: use default encoding for this type (see get_default_encoding_idx())
+- `STRENC_NONE`: force no-conversion encoding
+- `AP_ALLOWDUPS`: use 'dup' construct
+- `AP_SIGNED`: treats numbers as signed
+- `AP_INDEX`: display array element indexes as comments
+- `AP_ARRAY`: create as array (this flag is not stored in database)
+- `AP_IDXBASEMASK`: mask for number base of the indexes
+- `AP_IDXDEC`: display indexes in decimal
+- `AP_IDXHEX`: display indexes in hex
+- `AP_IDXOCT`: display indexes in octal
+- `AP_IDXBIN`: display indexes in binary
+- `SWI_SPARSE`: sparse switch (value table present), otherwise lowcase present
+- `SWI_V32`: 32-bit values in table
+- `SWI_J32`: 32-bit jump offsets
+- `SWI_VSPLIT`: value table is split (only for 32-bit values)
+- `SWI_USER`: user specified switch (starting from version 2)
+- `SWI_DEF_IN_TBL`: default case is an entry in the jump table. This flag is applicable in 2 cases:
+- `SWI_JMP_INV`: jumptable is inversed. (last entry is for first entry in values table)
+- `SWI_SHIFT_MASK`: use formula (element<<shift) + elbase to find jump targets
+- `SWI_ELBASE`: elbase is present (otherwise the base of the switch segment will be used)
+- `SWI_JSIZE`: jump offset expansion bit
+- `SWI_VSIZE`: value table element size expansion bit
+- `SWI_SEPARATE`: create an array of individual elements (otherwise separate items)
+- `SWI_SIGNED`: jump table entries are signed
+- `SWI_CUSTOM`: custom jump table. processor_t::create_switch_xrefs will be called to create code xrefs for the table. Custom jump table must be created by the module (see also SWI_STDTBL)
+- `SWI_INDIRECT`: value table elements are used as indexes into the jump table (for sparse switches)
+- `SWI_SUBTRACT`: table values are subtracted from the elbase instead of being added
+- `SWI_HXNOLOWCASE`: lowcase value should not be used by the decompiler (internal flag)
+- `SWI_STDTBL`: custom jump table with standard table formatting. ATM IDA doesn't use SWI_CUSTOM for switches with standard table formatting. So this flag can be considered as obsolete.
+- `SWI_DEFRET`: return in the default case (defjump==BADADDR)
+- `SWI_SELFREL`: jump address is relative to the element not to ELBASE
+- `SWI_JMPINSN`: jump table entries are insns. For such entries SHIFT has a different meaning. It denotes the number of insns in the entry. For example, 0 - the entry contains the jump to the case, 1 - the entry contains one insn like a 'mov' and jump to the end of case, and so on.
+- `SWI_VERSION`: the structure contains the VERSION member
+- `cvar`
+- `V695_REF_OFF8`: reserved
+- `REF_OFF16`: 16bit full offset
+- `REF_OFF32`: 32bit full offset
+- `REF_LOW8`: low 8bits of 16bit offset
+- `REF_LOW16`: low 16bits of 32bit offset
+- `REF_HIGH8`: high 8bits of 16bit offset
+- `REF_HIGH16`: high 16bits of 32bit offset
+- `V695_REF_VHIGH`: obsolete
+- `V695_REF_VLOW`: obsolete
+- `REF_OFF64`: 64bit full offset
+- `REF_OFF8`: 8bit full offset
+- `REF_LAST`
+- `REFINFO_TYPE`: reference type (reftype_t), or custom reference ID if REFINFO_CUSTOM set
+- `REFINFO_RVAOFF`: based reference (rva); refinfo_t::base will be forced to get_imagebase(); such a reference is displayed with the asm_t::a_rva keyword
+- `REFINFO_PASTEND`: reference past an item; it may point to an nonexistent address; do not destroy alignment dirs
+- `REFINFO_CUSTOM`: a custom reference. see custom_refinfo_handler_t. the id of the custom refinfo is stored under the REFINFO_TYPE mask.
+- `REFINFO_NOBASE`: don't create the base xref; implies that the base can be any value. nb: base xrefs are created only if the offset base points to the middle of a segment
+- `REFINFO_SUBTRACT`: the reference value is subtracted from the base value instead of (as usual) being added to it
+- `REFINFO_SIGNEDOP`: the operand value is sign-extended (only supported for REF_OFF8/16/32/64)
+- `REFINFO_NO_ZEROS`: an opval of 0 will be considered invalid
+- `REFINFO_NO_ONES`: an opval of ~0 will be considered invalid
+- `REFINFO_SELFREF`: the self-based reference; refinfo_t::base will be forced to the reference address
+- `MAXSTRUCPATH`: maximal inclusion depth of unions
+- `POF_VALID_TI`
+- `POF_VALID_AFLAGS`
+- `POF_IS_F64`
+- `RIDX_FILE_FORMAT_NAME`: file format name for loader modules
+- `RIDX_SELECTORS`: 2..63 are for selector_t blob (see init_selectors())
+- `RIDX_GROUPS`: segment group information (see init_groups())
+- `RIDX_H_PATH`: C header path.
+- `RIDX_C_MACROS`: C predefined macros.
+- `RIDX_SMALL_IDC_OLD`: Instant IDC statements (obsolete)
+- `RIDX_NOTEPAD`: notepad blob, occupies 1000 indexes (1MB of text)
+- `RIDX_INCLUDE`: assembler include file name
+- `RIDX_SMALL_IDC`: Instant IDC statements, blob.
+- `RIDX_DUALOP_GRAPH`: Graph text representation options.
+- `RIDX_DUALOP_TEXT`: Text text representation options.
+- `RIDX_MD5`: MD5 of the input file.
+- `RIDX_IDA_VERSION`: version of ida which created the database
+- `RIDX_STR_ENCODINGS`: a list of encodings for the program strings
+- `RIDX_SRCDBG_PATHS`: source debug paths, occupies 20 indexes
+- `RIDX_DBG_BINPATHS`: unused (20 indexes)
+- `RIDX_SHA256`: SHA256 of the input file.
+- `RIDX_ABINAME`: ABI name (processor specific)
+- `RIDX_ARCHIVE_PATH`: archive file path
+- `RIDX_PROBLEMS`: problem lists
+- `RIDX_SRCDBG_UNDESIRED`: user-closed source files, occupies 20 indexes
+- `BPU_1B`
+- `BPU_2B`
+- `BPU_4B`
+- `GOTEA_NODE_NAME`: node containing address of .got section
+- `GOTEA_NODE_IDX`
+- `get_initial_version`
+
+## Classes Overview
+
+- `custom_data_type_ids_fids_array`
+- `strpath_ids_array`
+- `array_parameters_t`
+- `switch_info_t`
+- `custom_data_type_ids_t`
+- `refinfo_t`
+- `strpath_t`
+- `enum_const_t`
+- `opinfo_t`
+- `printop_t`
+
+## Functions Overview
+
+- `ea2node(ea: ida_idaapi.ea_t) -> nodeidx_t`: Get netnode for the specified address.
+- `node2ea(ndx: nodeidx_t) -> ida_idaapi.ea_t`
+- `end_ea2node(ea: ida_idaapi.ea_t) -> nodeidx_t`
+- `getnode(ea: ida_idaapi.ea_t) -> netnode`
+- `get_strid(ea: ida_idaapi.ea_t) -> tid_t`
+- `set_aflags(ea: ida_idaapi.ea_t, flags: aflags_t) -> None`
+- `upd_abits(ea: ida_idaapi.ea_t, clr_bits: aflags_t, set_bits: aflags_t) -> None`
+- `set_abits(ea: ida_idaapi.ea_t, bits: aflags_t) -> None`
+- `clr_abits(ea: ida_idaapi.ea_t, bits: aflags_t) -> None`
+- `get_aflags(ea: ida_idaapi.ea_t) -> aflags_t`
+- `del_aflags(ea: ida_idaapi.ea_t) -> None`
+- `has_aflag_linnum(flags: aflags_t) -> bool`
+- `is_aflag_usersp(flags: aflags_t) -> bool`
+- `is_aflag_public_name(flags: aflags_t) -> bool`
+- `is_aflag_weak_name(flags: aflags_t) -> bool`
+- `is_aflag_hidden_item(flags: aflags_t) -> bool`
+- `is_aflag_manual_insn(flags: aflags_t) -> bool`
+- `is_aflag_hidden_border(flags: aflags_t) -> bool`
+- `is_aflag_zstroff(flags: aflags_t) -> bool`
+- `is_aflag__bnot0(flags: aflags_t) -> bool`
+- `is_aflag__bnot1(flags: aflags_t) -> bool`
+- `is_aflag_libitem(flags: aflags_t) -> bool`
+- `has_aflag_ti(flags: aflags_t) -> bool`
+- `has_aflag_ti0(flags: aflags_t) -> bool`
+- `has_aflag_ti1(flags: aflags_t) -> bool`
+- `has_aflag_lname(flags: aflags_t) -> bool`
+- `is_aflag_tilcmt(flags: aflags_t) -> bool`
+- `is_aflag_lzero0(flags: aflags_t) -> bool`
+- `is_aflag_lzero1(flags: aflags_t) -> bool`
+- `is_aflag_colored_item(flags: aflags_t) -> bool`
+- `is_aflag_terse_struc(flags: aflags_t) -> bool`
+- `is_aflag__invsign0(flags: aflags_t) -> bool`
+- `is_aflag__invsign1(flags: aflags_t) -> bool`
+- `is_aflag_noret(flags: aflags_t) -> bool`
+- `is_aflag_fixed_spd(flags: aflags_t) -> bool`
+- `is_aflag_align_flow(flags: aflags_t) -> bool`
+- `is_aflag_userti(flags: aflags_t) -> bool`
+- `is_aflag_retfp(flags: aflags_t) -> bool`
+- `uses_aflag_modsp(flags: aflags_t) -> bool`
+- `is_aflag_notcode(flags: aflags_t) -> bool`
+- `is_aflag_notproc(flags: aflags_t) -> bool`
+- `is_aflag_type_guessed_by_ida(flags: aflags_t) -> bool`
+- `is_aflag_func_guessed_by_hexrays(flags: aflags_t) -> bool`
+- `is_aflag_data_guessed_by_hexrays(flags: aflags_t) -> bool`
+- `is_aflag_type_determined_by_hexrays(flags: aflags_t) -> bool`
+- `is_aflag_type_guessed_by_hexrays(flags: aflags_t) -> bool`
+- `is_hidden_item(ea: ida_idaapi.ea_t) -> bool`
+- `hide_item(ea: ida_idaapi.ea_t) -> None`
+- `unhide_item(ea: ida_idaapi.ea_t) -> None`
+- `is_hidden_border(ea: ida_idaapi.ea_t) -> bool`
+- `hide_border(ea: ida_idaapi.ea_t) -> None`
+- `unhide_border(ea: ida_idaapi.ea_t) -> None`
+- `uses_modsp(ea: ida_idaapi.ea_t) -> bool`
+- `set_usemodsp(ea: ida_idaapi.ea_t) -> None`
+- `clr_usemodsp(ea: ida_idaapi.ea_t) -> None`
+- `is_zstroff(ea: ida_idaapi.ea_t) -> bool`
+- `set_zstroff(ea: ida_idaapi.ea_t) -> None`
+- `clr_zstroff(ea: ida_idaapi.ea_t) -> None`
+- `is__bnot0(ea: ida_idaapi.ea_t) -> bool`
+- `set__bnot0(ea: ida_idaapi.ea_t) -> None`
+- `clr__bnot0(ea: ida_idaapi.ea_t) -> None`
+- `is__bnot1(ea: ida_idaapi.ea_t) -> bool`
+- `set__bnot1(ea: ida_idaapi.ea_t) -> None`
+- `clr__bnot1(ea: ida_idaapi.ea_t) -> None`
+- `is_libitem(ea: ida_idaapi.ea_t) -> bool`
+- `set_libitem(ea: ida_idaapi.ea_t) -> None`
+- `clr_libitem(ea: ida_idaapi.ea_t) -> None`
+- `has_ti(ea: ida_idaapi.ea_t) -> bool`
+- `set_has_ti(ea: ida_idaapi.ea_t) -> None`
+- `clr_has_ti(ea: ida_idaapi.ea_t) -> None`
+- `has_ti0(ea: ida_idaapi.ea_t) -> bool`
+- `set_has_ti0(ea: ida_idaapi.ea_t) -> None`
+- `clr_has_ti0(ea: ida_idaapi.ea_t) -> None`
+- `has_ti1(ea: ida_idaapi.ea_t) -> bool`
+- `set_has_ti1(ea: ida_idaapi.ea_t) -> None`
+- `clr_has_ti1(ea: ida_idaapi.ea_t) -> None`
+- `has_lname(ea: ida_idaapi.ea_t) -> bool`
+- `set_has_lname(ea: ida_idaapi.ea_t) -> None`
+- `clr_has_lname(ea: ida_idaapi.ea_t) -> None`
+- `is_tilcmt(ea: ida_idaapi.ea_t) -> bool`
+- `set_tilcmt(ea: ida_idaapi.ea_t) -> None`
+- `clr_tilcmt(ea: ida_idaapi.ea_t) -> None`
+- `is_usersp(ea: ida_idaapi.ea_t) -> bool`
+- `set_usersp(ea: ida_idaapi.ea_t) -> None`
+- `clr_usersp(ea: ida_idaapi.ea_t) -> None`
+- `is_lzero0(ea: ida_idaapi.ea_t) -> bool`
+- `set_lzero0(ea: ida_idaapi.ea_t) -> None`
+- `clr_lzero0(ea: ida_idaapi.ea_t) -> None`
+- `is_lzero1(ea: ida_idaapi.ea_t) -> bool`
+- `set_lzero1(ea: ida_idaapi.ea_t) -> None`
+- `clr_lzero1(ea: ida_idaapi.ea_t) -> None`
+- `is_colored_item(ea: ida_idaapi.ea_t) -> bool`
+- `set_colored_item(ea: ida_idaapi.ea_t) -> None`
+- `clr_colored_item(ea: ida_idaapi.ea_t) -> None`
+- `is_terse_struc(ea: ida_idaapi.ea_t) -> bool`
+- `set_terse_struc(ea: ida_idaapi.ea_t) -> None`
+- `clr_terse_struc(ea: ida_idaapi.ea_t) -> None`
+- `is__invsign0(ea: ida_idaapi.ea_t) -> bool`
+- `set__invsign0(ea: ida_idaapi.ea_t) -> None`
+- `clr__invsign0(ea: ida_idaapi.ea_t) -> None`
+- `is__invsign1(ea: ida_idaapi.ea_t) -> bool`
+- `set__invsign1(ea: ida_idaapi.ea_t) -> None`
+- `clr__invsign1(ea: ida_idaapi.ea_t) -> None`
+- `is_noret(ea: ida_idaapi.ea_t) -> bool`
+- `set_noret(ea: ida_idaapi.ea_t) -> None`
+- `clr_noret(ea: ida_idaapi.ea_t) -> None`
+- `is_fixed_spd(ea: ida_idaapi.ea_t) -> bool`
+- `set_fixed_spd(ea: ida_idaapi.ea_t) -> None`
+- `clr_fixed_spd(ea: ida_idaapi.ea_t) -> None`
+- `is_align_flow(ea: ida_idaapi.ea_t) -> bool`
+- `set_align_flow(ea: ida_idaapi.ea_t) -> None`
+- `clr_align_flow(ea: ida_idaapi.ea_t) -> None`
+- `is_userti(ea: ida_idaapi.ea_t) -> bool`
+- `set_userti(ea: ida_idaapi.ea_t) -> None`
+- `clr_userti(ea: ida_idaapi.ea_t) -> None`
+- `is_retfp(ea: ida_idaapi.ea_t) -> bool`
+- `set_retfp(ea: ida_idaapi.ea_t) -> None`
+- `clr_retfp(ea: ida_idaapi.ea_t) -> None`
+- `is_notproc(ea: ida_idaapi.ea_t) -> bool`
+- `set_notproc(ea: ida_idaapi.ea_t) -> None`
+- `clr_notproc(ea: ida_idaapi.ea_t) -> None`
+- `is_type_guessed_by_ida(ea: ida_idaapi.ea_t) -> bool`
+- `is_func_guessed_by_hexrays(ea: ida_idaapi.ea_t) -> bool`
+- `is_data_guessed_by_hexrays(ea: ida_idaapi.ea_t) -> bool`
+- `is_type_determined_by_hexrays(ea: ida_idaapi.ea_t) -> bool`
+- `is_type_guessed_by_hexrays(ea: ida_idaapi.ea_t) -> bool`
+- `set_type_guessed_by_ida(ea: ida_idaapi.ea_t) -> None`
+- `set_func_guessed_by_hexrays(ea: ida_idaapi.ea_t) -> None`
+- `set_data_guessed_by_hexrays(ea: ida_idaapi.ea_t) -> None`
+- `set_type_determined_by_hexrays(ea: ida_idaapi.ea_t) -> None`
+- `set_notcode(ea: ida_idaapi.ea_t) -> None`: Mark address so that it cannot be converted to instruction.
+- `clr_notcode(ea: ida_idaapi.ea_t) -> None`: Clear not-code mark.
+- `is_notcode(ea: ida_idaapi.ea_t) -> bool`: Is the address marked as not-code?
+- `set_visible_item(ea: ida_idaapi.ea_t, visible: bool) -> None`: Change visibility of item at given ea.
+- `is_visible_item(ea: ida_idaapi.ea_t) -> bool`: Test visibility of item at given ea.
+- `is_finally_visible_item(ea: ida_idaapi.ea_t) -> bool`: Is instruction visible?
+- `set_source_linnum(ea: ida_idaapi.ea_t, lnnum: int) -> None`
+- `get_source_linnum(ea: ida_idaapi.ea_t) -> int`
+- `del_source_linnum(ea: ida_idaapi.ea_t) -> None`
+- `get_absbase(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`
+- `set_absbase(ea: ida_idaapi.ea_t, x: ida_idaapi.ea_t) -> None`
+- `del_absbase(ea: ida_idaapi.ea_t) -> None`
+- `get_ind_purged(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`
+- `del_ind_purged(ea: ida_idaapi.ea_t) -> None`
+- `get_str_type(ea: ida_idaapi.ea_t) -> int`
+- `set_str_type(ea: ida_idaapi.ea_t, x: int) -> None`
+- `del_str_type(ea: ida_idaapi.ea_t) -> None`
+- `get_str_type_code(strtype: int) -> uchar`
+- `get_str_term1(strtype: int) -> char`
+- `get_str_term2(strtype: int) -> char`
+- `get_str_encoding_idx(strtype: int) -> uchar`
+- `set_str_encoding_idx(strtype: int, encoding_idx: int) -> int`
+- `make_str_type(type_code: uchar, encoding_idx: int, term1: uchar = 0, term2: uchar = 0) -> int`
+- `is_pascal(strtype: int) -> bool`
+- `get_str_type_prefix_length(strtype: int) -> size_t`
+- `get_alignment(ea: ida_idaapi.ea_t) -> int`
+- `set_alignment(ea: ida_idaapi.ea_t, x: int) -> None`
+- `del_alignment(ea: ida_idaapi.ea_t) -> None`
+- `set_item_color(ea: ida_idaapi.ea_t, color: bgcolor_t) -> None`
+- `get_item_color(ea: ida_idaapi.ea_t) -> bgcolor_t`
+- `del_item_color(ea: ida_idaapi.ea_t) -> bool`
+- `get_array_parameters(out: array_parameters_t, ea: ida_idaapi.ea_t) -> ssize_t`
+- `set_array_parameters(ea: ida_idaapi.ea_t, _in: array_parameters_t) -> None`
+- `del_array_parameters(ea: ida_idaapi.ea_t) -> None`
+- `get_switch_info(*args)`
+- `set_switch_info(ea: ida_idaapi.ea_t, _in: switch_info_t) -> None`
+- `del_switch_info(ea: ida_idaapi.ea_t) -> None`
+- `get_switch_parent(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`
+- `set_switch_parent(ea: ida_idaapi.ea_t, x: ida_idaapi.ea_t) -> None`
+- `del_switch_parent(ea: ida_idaapi.ea_t) -> None`
+- `get_custom_data_type_ids(cdis: custom_data_type_ids_t, ea: ida_idaapi.ea_t) -> int`
+- `set_custom_data_type_ids(ea: ida_idaapi.ea_t, cdis: custom_data_type_ids_t) -> None`
+- `del_custom_data_type_ids(ea: ida_idaapi.ea_t) -> None`
+- `is_reftype_target_optional(type: reftype_t) -> bool`: Can the target be calculated using operand value?
+- `get_reftype_by_size(size: size_t) -> reftype_t`: Get REF_... constant from size Supported sizes: 1,2,4,8,16 For other sizes returns reftype_t(-1)
+- `find_custom_refinfo(name: str) -> int`: Get id of a custom refinfo type.
+- `get_custom_refinfo(crid: int) -> custom_refinfo_handler_t const *`: Get definition of a registered custom refinfo type.
+- `set_refinfo_ex(ea: ida_idaapi.ea_t, n: int, ri: refinfo_t) -> bool`
+- `set_refinfo(*args) -> bool`
+- `get_refinfo(ri: refinfo_t, ea: ida_idaapi.ea_t, n: int) -> bool`
+- `del_refinfo(ea: ida_idaapi.ea_t, n: int) -> bool`
+- `get_tinfo(tif: tinfo_t, ea: ida_idaapi.ea_t) -> bool`
+- `set_tinfo(ea: ida_idaapi.ea_t, tif: tinfo_t) -> bool`
+- `del_tinfo(ea: ida_idaapi.ea_t) -> None`
+- `get_op_tinfo(tif: tinfo_t, ea: ida_idaapi.ea_t, n: int) -> bool`
+- `set_op_tinfo(ea: ida_idaapi.ea_t, n: int, tif: tinfo_t) -> bool`
+- `del_op_tinfo(ea: ida_idaapi.ea_t, n: int) -> None`
+- `get_root_filename() -> str`: Get file name only of the input file.
+- `dbg_get_input_path() -> str`: Get debugger input file name/path (see LFLG_DBG_NOPATH)
+- `get_input_file_path() -> str`: Get full path of the input file.
+- `set_root_filename(file: str) -> None`: Set full path of the input file.
+- `retrieve_input_file_size() -> size_t`: Get size of input file in bytes.
+- `retrieve_input_file_crc32() -> int`: Get input file crc32 stored in the database. it can be used to check that the input file has not been changed.
+- `retrieve_input_file_md5() -> bytes`: Get input file md5.
+- `retrieve_input_file_sha256() -> bytes`: Get input file sha256.
+- `get_asm_inc_file() -> str`: Get name of the include file.
+- `set_asm_inc_file(file: str) -> bool`: Set name of the include file.
+- `get_imagebase() -> ida_idaapi.ea_t`: Get image base address.
+- `set_imagebase(base: ida_idaapi.ea_t) -> None`: Set image base address.
+- `get_ids_modnode() -> netnode`: Get ids modnode.
+- `set_ids_modnode(id: netnode) -> None`: Set ids modnode.
+- `get_archive_path() -> str`: Get archive file path from which input file was extracted.
+- `set_archive_path(file: str) -> bool`: Set archive file path from which input file was extracted.
+- `get_loader_format_name() -> str`: Get file format name for loader modules.
+- `set_loader_format_name(name: str) -> None`: Set file format name for loader modules.
+- `get_initial_ida_version() -> str`: Get version of ida which created the database (string format like "7.5")
+- `get_ida_notepad_text() -> str`: Get notepad text.
+- `set_ida_notepad_text(text: str, size: size_t = 0) -> None`: Set notepad text.
+- `get_srcdbg_paths() -> str`: Get source debug paths.
+- `set_srcdbg_paths(paths: str) -> None`: Set source debug paths.
+- `get_srcdbg_undesired_paths() -> str`: Get user-closed source files.
+- `set_srcdbg_undesired_paths(paths: str) -> None`: Set user-closed source files.
+- `get_initial_idb_version() -> ushort`: Get initial version of the database (numeric format like 700)
+- `get_idb_ctime() -> time_t`: Get database creation timestamp.
+- `get_elapsed_secs() -> size_t`: Get seconds database stayed open.
+- `get_idb_nopens() -> size_t`: Get number of times the database is opened.
+- `get_encoding_qty() -> int`
+- `get_encoding_name(idx: int) -> str`
+- `add_encoding(encname: str) -> int`
+- `del_encoding(idx: int) -> bool`
+- `rename_encoding(idx: int, encname: str) -> bool`
+- `get_encoding_bpu(idx: int) -> int`
+- `get_encoding_bpu_by_name(encname: str) -> int`
+- `get_strtype_bpu(strtype: int) -> int`
+- `get_default_encoding_idx(bpu: int) -> int`
+- `set_default_encoding_idx(bpu: int, idx: int) -> bool`
+- `encoding_from_strtype(strtype: int) -> str`
+- `get_outfile_encoding_idx() -> int`
+- `set_outfile_encoding_idx(idx: int) -> bool`
+- `get_import_module_qty() -> uint`
+- `delete_imports() -> None`
+- `set_gotea(gotea: ida_idaapi.ea_t) -> None`
+- `get_gotea() -> ida_idaapi.ea_t`
+- `get_import_module_name(mod_index)`: Returns the name of an imported module given its index
+- `enum_import_names(mod_index, callback)`: Enumerate imports from a specific module.
+- `switch_info_t__from_ptrval__(ptrval: size_t) -> switch_info_t *`
+- `get_switch_info(*args)`
+- `get_abi_name()`

@@ -1,0 +1,1838 @@
+# ida_hexrays
+
+There are 2 representations of the binary code in the decompiler:
+
+Hex-Rays Decompiler project Copyright (c) 1990-2025 Hex-Rays ALL RIGHTS RESERVED.
+
+Microcode is represented by the following classes:
+* mba_t keeps general info about the decompiled code and array of basic blocks. usually mba_t is named mba
+* mblock_t a basic block. includes list of instructions
+* minsn_t an instruction. contains 3 operands: left, right, and destination
+* mop_t an operand. depending on its type may hold various info like a number, register, stack variable, etc.
+* mlist_t list of memory or register locations; can hold vast areas of memory and multiple registers. this class is used very extensively in the decompiler. it may represent list of locations accessed by an instruction or even an entire basic block. it is also used as argument of many functions. for example, there is a function that searches for an instruction that refers to a mlist_t.
+
+See [https://hex-rays.com/blog/microcode-in-pictures](https://hex-rays.com/blog/microcode-in-pictures) for a few pictures.
+Ctree is represented by:
+* cfunc_t keeps general info about the decompiled code, including a pointer to mba_t. deleting cfunc_t will delete mba_t too (however, decompiler returns cfuncptr_t, which is a reference counting object and deletes the underlying function as soon as all references to it go out of scope). cfunc_t has body, which represents the decompiled function body as cinsn_t.
+* cinsn_t a C statement. can be a compound statement or any other legal C statements (like if, for, while, return, expression-statement, etc). depending on the statement type has pointers to additional info. for example, the if statement has poiner to cif_t, which holds the if condition, then branch, and optionally else branch. Please note that despite of the name cinsn_t we say statements, not instructions. For us instructions are part of microcode, not ctree.
+* cexpr_t a C expression. is used as part of a C statement, when necessary. cexpr_t has type field, which keeps the expression type.
+* citem_t a base class for cinsn_t and cexpr_t, holds common info like the address, label, and opcode.
+* cnumber_t a constant 64-bit number. in addition to its value also holds information how to represent it: decimal, hex, or as a symbolic constant (enum member). please note that numbers are represented by another class (mnumber_t) in microcode.
+
+See [https://hex-rays.com/blog/hex-rays-decompiler-primer](https://hex-rays.com/blog/hex-rays-decompiler-primer) for more pictures and more details.
+Both microcode and ctree use the following class:
+* lvar_t a local variable. may represent a stack or register variable. a variable has a name, type, location, etc. the list of variables is stored in mba->vars.
+* lvar_locator_t holds a variable location (vdloc_t) and its definition address.
+* vdloc_t describes a variable location, like a register number, a stack offset, or, in complex cases, can be a mix of register and stack locations. very similar to argloc_t, which is used in ida. the differences between argloc_t and vdloc_t are:
+* vdloc_t never uses ARGLOC_REG2
+* vdloc_t uses micro register numbers instead of processor register numbers
+* the stack offsets are never negative in vdloc_t, while in argloc_t there can be negative offsets
+
+The above are the most important classes in this header file. There are many auxiliary classes, please see their definitions in the header file.
+See also the description of Virtual Machine used by Microcode.
+
+## Constants
+
+- `MAX_SUPPORTED_STACK_SIZE`
+- `MAX_VLR_SIZE`
+- `CMP_NZ`
+- `CMP_Z`
+- `CMP_AE`
+- `CMP_B`
+- `CMP_A`
+- `CMP_BE`
+- `CMP_GT`
+- `CMP_GE`
+- `CMP_LT`
+- `CMP_LE`
+- `cvar`
+- `MAX_VLR_VALUE`
+- `MAX_VLR_SVALUE`
+- `MIN_VLR_SVALUE`
+- `MERR_OK`: ok
+- `MERR_BLOCK`: no error, switch to new block
+- `MERR_INTERR`: internal error
+- `MERR_INSN`: cannot convert to microcode
+- `MERR_MEM`: not enough memory
+- `MERR_BADBLK`: bad block found
+- `MERR_BADSP`: positive sp value has been found
+- `MERR_PROLOG`: prolog analysis failed
+- `MERR_SWITCH`: wrong switch idiom
+- `MERR_EXCEPTION`: exception analysis failed
+- `MERR_HUGESTACK`: stack frame is too big
+- `MERR_LVARS`: local variable allocation failed
+- `MERR_BITNESS`: 16-bit functions cannot be decompiled
+- `MERR_BADCALL`: could not determine call arguments
+- `MERR_BADFRAME`: function frame is wrong
+- `MERR_UNKTYPE`: undefined type s (currently unused error code)
+- `MERR_BADIDB`: inconsistent database information
+- `MERR_SIZEOF`: wrong basic type sizes in compiler settings
+- `MERR_REDO`: redecompilation has been requested
+- `MERR_CANCELED`: decompilation has been cancelled
+- `MERR_RECDEPTH`: max recursion depth reached during lvar allocation
+- `MERR_OVERLAP`: variables would overlap: s
+- `MERR_PARTINIT`: partially initialized variable s
+- `MERR_COMPLEX`: too complex function
+- `MERR_LICENSE`: no license available
+- `MERR_ONLY32`: only 32-bit functions can be decompiled for the current database
+- `MERR_ONLY64`: only 64-bit functions can be decompiled for the current database
+- `MERR_BUSY`: already decompiling a function
+- `MERR_FARPTR`: far memory model is supported only for pc
+- `MERR_EXTERN`: special segments cannot be decompiled
+- `MERR_FUNCSIZE`: too big function
+- `MERR_BADRANGES`: bad input ranges
+- `MERR_BADARCH`: current architecture is not supported
+- `MERR_DSLOT`: bad instruction in the delay slot
+- `MERR_STOP`: no error, stop the analysis
+- `MERR_CLOUD`: cloud: s
+- `MERR_EMULATOR`: emulator: s
+- `MERR_MAX_ERR`
+- `MERR_LOOP`: internal code: redo last loop (never reported)
+- `m_nop`
+- `m_stx`
+- `m_ldx`
+- `m_ldc`
+- `m_mov`
+- `m_neg`
+- `m_lnot`
+- `m_bnot`
+- `m_xds`
+- `m_xdu`
+- `m_low`
+- `m_high`
+- `m_add`
+- `m_sub`
+- `m_mul`
+- `m_udiv`
+- `m_sdiv`
+- `m_umod`
+- `m_smod`
+- `m_or`
+- `m_and`
+- `m_xor`
+- `m_shl`
+- `m_shr`
+- `m_sar`
+- `m_cfadd`
+- `m_ofadd`
+- `m_cfshl`
+- `m_cfshr`
+- `m_sets`
+- `m_seto`
+- `m_setp`
+- `m_setnz`
+- `m_setz`
+- `m_setae`
+- `m_setb`
+- `m_seta`
+- `m_setbe`
+- `m_setg`
+- `m_setge`
+- `m_setl`
+- `m_setle`
+- `m_jcnd`
+- `m_jnz`
+- `m_jz`
+- `m_jae`
+- `m_jb`
+- `m_ja`
+- `m_jbe`
+- `m_jg`
+- `m_jge`
+- `m_jl`
+- `m_jle`
+- `m_jtbl`
+- `m_ijmp`
+- `m_goto`
+- `m_call`
+- `m_icall`
+- `m_ret`
+- `m_push`
+- `m_pop`
+- `m_und`
+- `m_ext`
+- `m_f2i`
+- `m_f2u`
+- `m_i2f`
+- `m_u2f`
+- `m_f2f`
+- `m_fneg`
+- `m_fadd`
+- `m_fsub`
+- `m_fmul`
+- `m_fdiv`
+- `MUST_ACCESS`
+- `MAY_ACCESS`
+- `MAYMUST_ACCESS_MASK`
+- `ONE_ACCESS_TYPE`
+- `INCLUDE_SPOILED_REGS`
+- `EXCLUDE_PASS_REGS`
+- `FULL_XDSU`
+- `WITH_ASSERTS`
+- `EXCLUDE_VOLATILE`
+- `INCLUDE_UNUSED_SRC`
+- `INCLUDE_DEAD_RETREGS`
+- `INCLUDE_RESTRICTED`
+- `CALL_SPOILS_ONLY_ARGS`
+- `mr_none`
+- `mr_cf`
+- `mr_zf`
+- `mr_sf`
+- `mr_of`
+- `mr_pf`
+- `cc_count`
+- `mr_cc`
+- `mr_first`
+- `NF_FIXED`: number format has been defined by the user
+- `NF_NEGDONE`: temporary internal bit: negation has been performed
+- `NF_BINVDONE`: temporary internal bit: inverting bits is done
+- `NF_NEGATE`: The user asked to negate the constant.
+- `NF_BITNOT`: The user asked to invert bits of the constant.
+- `NF_VALID`: internal bit: stroff or enum is valid for enums: this bit is set immediately for stroffs: this bit is set at the end of decompilation
+- `GUESSED_NONE`
+- `GUESSED_WEAK`
+- `GUESSED_FUNC`
+- `GUESSED_DATA`
+- `TS_NOELL`
+- `TS_SHRINK`
+- `TS_DONTREF`
+- `TS_MASK`
+- `SVW_INT`
+- `SVW_FLOAT`
+- `SVW_SOFT`
+- `LVINF_KEEP`: preserve saved user settings regardless of vars for example, if a var loses all its user-defined attributes or even gets destroyed, keep its lvar_saved_info_t. this is used for ephemeral variables that get destroyed by macro recognition.
+- `LVINF_SPLIT`: split allocation of a new variable. forces the decompiler to create a new variable at ll.defea
+- `LVINF_NOPTR`: variable type should not be a pointer
+- `LVINF_NOMAP`: forbid automatic mapping of the variable
+- `LVINF_UNUSED`: unused argument, corresponds to CVAR_UNUSED
+- `ULV_PRECISE_DEFEA`: Use precise defea's for lvar locations.
+- `MLI_NAME`: apply lvar name
+- `MLI_TYPE`: apply lvar type
+- `MLI_CMT`: apply lvar comment
+- `MLI_SET_FLAGS`: set LVINF_... bits
+- `MLI_CLR_FLAGS`: clear LVINF_... bits
+- `bitset_width`
+- `bitset_align`
+- `bitset_shift`
+- `mop_z`: none
+- `mop_r`: register (they exist until MMAT_LVARS)
+- `mop_n`: immediate number constant
+- `mop_str`: immediate string constant (user representation)
+- `mop_d`: result of another instruction
+- `mop_S`: local stack variable (they exist until MMAT_LVARS)
+- `mop_v`: global variable
+- `mop_b`: micro basic block (mblock_t)
+- `mop_f`: list of arguments
+- `mop_l`: local variable
+- `mop_a`: mop_addr_t: address of operand (mop_l, mop_v, mop_S, mop_r)
+- `mop_h`: helper function
+- `mop_c`: mcases
+- `mop_fn`: floating point constant
+- `mop_p`: operand pair
+- `mop_sc`: scattered
+- `NOSIZE`: wrong or unexisting operand size
+- `SHINS_NUMADDR`: display definition addresses for numbers
+- `SHINS_VALNUM`: display value numbers
+- `SHINS_SHORT`: do not display use-def chains and other attrs
+- `SHINS_LDXEA`: display address of ldx expressions (not used)
+- `NO_SIDEFF`: change operand size but ignore side effects if you decide to keep the changed operand, handle_new_size() must be called
+- `WITH_SIDEFF`: change operand size and handle side effects
+- `ONLY_SIDEFF`: only handle side effects
+- `ANY_REGSIZE`: any register size is permitted
+- `ANY_FPSIZE`: any size of floating operand is permitted
+- `OPROP_IMPDONE`: imported operand (a pointer) has been dereferenced
+- `OPROP_UDT`: a struct or union
+- `OPROP_FLOAT`: possibly floating value
+- `OPROP_CCFLAGS`: mop_n: a pc-relative value mop_a: an address obtained from a relocation else: value of a condition code register (like mr_cc)
+- `OPROP_UDEFVAL`: uses undefined value
+- `OPROP_LOWADDR`: a low address offset
+- `OPROP_ABI`: is used to organize arg/retval of a call such operands should be combined more carefully than others at least on BE platforms
+- `ROLE_UNK`: unknown function role
+- `ROLE_EMPTY`: empty, does not do anything (maybe spoils regs)
+- `ROLE_MEMSET`: memset(void *dst, uchar value, size_t count);
+- `ROLE_MEMSET32`: memset32(void *dst, uint32 value, size_t count);
+- `ROLE_MEMSET64`: memset64(void *dst, uint64 value, size_t count);
+- `ROLE_MEMCPY`: memcpy(void *dst, const void *src, size_t count);
+- `ROLE_STRCPY`: strcpy(char *dst, const char *src);
+- `ROLE_STRLEN`: strlen(const char *src);
+- `ROLE_STRCAT`: strcat(char *dst, const char *src);
+- `ROLE_TAIL`: char *tail(const char *str);
+- `ROLE_BUG`: BUG() helper macro: never returns, causes exception.
+- `ROLE_ALLOCA`: alloca() function
+- `ROLE_BSWAP`: bswap() function (any size)
+- `ROLE_PRESENT`: present() function (used in patterns)
+- `ROLE_CONTAINING_RECORD`: CONTAINING_RECORD() macro.
+- `ROLE_FASTFAIL`: __fastfail()
+- `ROLE_READFLAGS`: __readeflags, __readcallersflags
+- `ROLE_IS_MUL_OK`: is_mul_ok
+- `ROLE_SATURATED_MUL`: saturated_mul
+- `ROLE_BITTEST`: [lock] bt
+- `ROLE_BITTESTANDSET`: [lock] bts
+- `ROLE_BITTESTANDRESET`: [lock] btr
+- `ROLE_BITTESTANDCOMPLEMENT`: [lock] btc
+- `ROLE_VA_ARG`: va_arg() macro
+- `ROLE_VA_COPY`: va_copy() function
+- `ROLE_VA_START`: va_start() function
+- `ROLE_VA_END`: va_end() function
+- `ROLE_ROL`: rotate left
+- `ROLE_ROR`: rotate right
+- `ROLE_CFSUB3`: carry flag after subtract with carry
+- `ROLE_OFSUB3`: overflow flag after subtract with carry
+- `ROLE_ABS`: integer absolute value
+- `ROLE_3WAYCMP0`: 3-way compare helper, returns -1/0/1
+- `ROLE_3WAYCMP1`: 3-way compare helper, returns 0/1/2
+- `ROLE_WMEMCPY`: wchar_t *wmemcpy(wchar_t *dst, const wchar_t *src, size_t n)
+- `ROLE_WMEMSET`: wchar_t *wmemset(wchar_t *dst, wchar_t wc, size_t n)
+- `ROLE_WCSCPY`: wchar_t *wcscpy(wchar_t *dst, const wchar_t *src);
+- `ROLE_WCSLEN`: size_t wcslen(const wchar_t *s)
+- `ROLE_WCSCAT`: wchar_t *wcscat(wchar_t *dst, const wchar_t *src)
+- `ROLE_SSE_CMP4`: e.g. _mm_cmpgt_ss
+- `ROLE_SSE_CMP8`: e.g. _mm_cmpgt_sd
+- `FUNC_NAME_MEMCPY`
+- `FUNC_NAME_WMEMCPY`
+- `FUNC_NAME_MEMSET`
+- `FUNC_NAME_WMEMSET`
+- `FUNC_NAME_MEMSET32`
+- `FUNC_NAME_MEMSET64`
+- `FUNC_NAME_STRCPY`
+- `FUNC_NAME_WCSCPY`
+- `FUNC_NAME_STRLEN`
+- `FUNC_NAME_WCSLEN`
+- `FUNC_NAME_STRCAT`
+- `FUNC_NAME_WCSCAT`
+- `FUNC_NAME_TAIL`
+- `FUNC_NAME_VA_ARG`
+- `FUNC_NAME_EMPTY`
+- `FUNC_NAME_PRESENT`
+- `FUNC_NAME_CONTAINING_RECORD`
+- `FUNC_NAME_MORESTACK`
+- `FCI_PROP`: call has been propagated
+- `FCI_DEAD`: some return registers were determined dead
+- `FCI_FINAL`: call type is final, should not be changed
+- `FCI_NORET`: call does not return
+- `FCI_PURE`: pure function
+- `FCI_NOSIDE`: call does not have side effects
+- `FCI_SPLOK`: spoiled/visible_memory lists have been optimized. for some functions we can reduce them as soon as information about the arguments becomes available. in order not to try optimize them again we use this bit.
+- `FCI_HASCALL`: A function is an synthetic helper combined from several instructions and at least one of them was a call to a real functions
+- `FCI_HASFMT`: A variadic function with recognized printf- or scanf-style format string
+- `FCI_EXPLOCS`: all arglocs are specified explicitly
+- `CHF_INITED`: is chain initialized? (valid only after lvar allocation)
+- `CHF_REPLACED`: chain operands have been replaced?
+- `CHF_OVER`: overlapped chain
+- `CHF_FAKE`: fake chain created by widen_chains()
+- `CHF_PASSTHRU`: pass-thru chain, must use the input variable to the block
+- `CHF_TERM`: terminating chain; the variable does not survive across the block
+- `SIZEOF_BLOCK_CHAINS`
+- `GCA_EMPTY`: include empty chains
+- `GCA_SPEC`: include chains for special registers
+- `GCA_ALLOC`: enumerate only allocated chains
+- `GCA_NALLOC`: enumerate only non-allocated chains
+- `GCA_OFIRST`: consider only chains of the first block
+- `GCA_OLAST`: consider only chains of the last block
+- `IPROP_OPTIONAL`: optional instruction
+- `IPROP_PERSIST`: persistent insn; they are not destroyed
+- `IPROP_WILDMATCH`: match multiple insns
+- `IPROP_CLNPOP`: the purpose of the instruction is to clean stack (e.g. "pop ecx" is often used for that)
+- `IPROP_FPINSN`: floating point insn
+- `IPROP_FARCALL`: call of a far function using push cs/call sequence
+- `IPROP_TAILCALL`: tail call
+- `IPROP_ASSERT`: assertion: usually mov #val, op. assertions are used to help the optimizer. assertions are ignored when generating ctree
+- `IPROP_SPLIT`: the instruction has been split:
+- `IPROP_SPLIT1`: into 1 byte
+- `IPROP_SPLIT2`: into 2 bytes
+- `IPROP_SPLIT4`: into 4 bytes
+- `IPROP_SPLIT8`: into 8 bytes
+- `IPROP_COMBINED`: insn has been modified because of a partial reference
+- `IPROP_EXTSTX`: this is m_ext propagated into m_stx
+- `IPROP_IGNLOWSRC`: low part of the instruction source operand has been created artificially (this bit is used only for 'and x, 80...')
+- `IPROP_INV_JX`: inverted conditional jump
+- `IPROP_WAS_NORET`: was noret icall
+- `IPROP_MULTI_MOV`: bits that can be set by plugins:
+- `IPROP_DONT_PROP`: may not propagate
+- `IPROP_DONT_COMB`: may not combine this instruction with others
+- `IPROP_MBARRIER`: this instruction acts as a memory barrier (instructions accessing memory may not be reordered past it)
+- `IPROP_UNMERGED`: 'goto' instruction was transformed info 'call'
+- `IPROP_UNPAIRED`: instruction is a result of del_dest_pairs() transformation
+- `OPTI_ADDREXPRS`: optimize all address expressions (&x+N; &x-&y)
+- `OPTI_MINSTKREF`: may update minstkref
+- `OPTI_COMBINSNS`: may combine insns (only for optimize_insn)
+- `OPTI_NO_LDXOPT`: the function is called after the propagation attempt, we do not optimize low/high(ldx) in this case
+- `OPTI_NO_VALRNG`: forbid using valranges
+- `EQ_IGNSIZE`: ignore source operand sizes
+- `EQ_IGNCODE`: ignore instruction opcodes
+- `EQ_CMPDEST`: compare instruction destinations
+- `EQ_OPTINSN`: optimize mop_d operands
+- `NORET_IGNORE_WAS_NORET_ICALL`
+- `NORET_FORBID_ANALYSIS`
+- `BLT_NONE`: unknown block type
+- `BLT_STOP`: stops execution regularly (must be the last block)
+- `BLT_0WAY`: does not have successors (tail is a noret function)
+- `BLT_1WAY`: passes execution to one block (regular or goto block)
+- `BLT_2WAY`: passes execution to two blocks (conditional jump)
+- `BLT_NWAY`: passes execution to many blocks (switch idiom)
+- `BLT_XTRN`: external block (out of function address)
+- `MBL_PRIV`: private block - no instructions except the specified are accepted (used in patterns)
+- `MBL_NONFAKE`: regular block
+- `MBL_FAKE`: fake block
+- `MBL_GOTO`: this block is a goto target
+- `MBL_TCAL`: aritifical call block for tail calls
+- `MBL_PUSH`: needs "convert push/pop instructions"
+- `MBL_DMT64`: needs "demote 64bits"
+- `MBL_COMB`: needs "combine" pass
+- `MBL_PROP`: needs 'propagation' pass
+- `MBL_DEAD`: needs "eliminate deads" pass
+- `MBL_LIST`: use/def lists are ready (not dirty)
+- `MBL_INCONST`: inconsistent lists: we are building them
+- `MBL_CALL`: call information has been built
+- `MBL_BACKPROP`: performed backprop_cc
+- `MBL_NORET`: dead end block: doesn't return execution control
+- `MBL_DSLOT`: block for delay slot
+- `MBL_VALRANGES`: should optimize using value ranges
+- `MBL_KEEP`: do not remove even if unreachable
+- `MBL_INLINED`: block was inlined, not originally part of mbr
+- `MBL_EXTFRAME`: an inlined block with an external frame
+- `FD_BACKWARD`: search direction
+- `FD_FORWARD`: search direction
+- `FD_USE`: look for use
+- `FD_DEF`: look for definition
+- `FD_DIRTY`: ignore possible implicit definitions by function calls and indirect memory access
+- `VR_AT_START`: get value ranges before the instruction or at the block start (if M is nullptr)
+- `VR_AT_END`: get value ranges after the instruction or at the block end, just after the last instruction (if M is nullptr)
+- `VR_EXACT`: find exact match. if not set, the returned valrng size will be >= vivl.size
+- `WARN_VARARG_REGS`: 0 cannot handle register arguments in vararg function, discarded them
+- `WARN_ILL_PURGED`: 1 odd caller purged bytes d, correcting
+- `WARN_ILL_FUNCTYPE`: 2 invalid function type 's' has been ignored
+- `WARN_VARARG_TCAL`: 3 cannot handle tail call to vararg
+- `WARN_VARARG_NOSTK`: 4 call vararg without local stack
+- `WARN_VARARG_MANY`: 5 too many varargs, some ignored
+- `WARN_ADDR_OUTARGS`: 6 cannot handle address arithmetics in outgoing argument area of stack frame - unused
+- `WARN_DEP_UNK_CALLS`: 7 found interdependent unknown calls
+- `WARN_ILL_ELLIPSIS`: 8 erroneously detected ellipsis type has been ignored
+- `WARN_GUESSED_TYPE`: 9 using guessed type s;
+- `WARN_EXP_LINVAR`: 10 failed to expand a linear variable
+- `WARN_WIDEN_CHAINS`: 11 failed to widen chains
+- `WARN_BAD_PURGED`: 12 inconsistent function type and number of purged bytes
+- `WARN_CBUILD_LOOPS`: 13 too many cbuild loops
+- `WARN_NO_SAVE_REST`: 14 could not find valid save-restore pair for s
+- `WARN_ODD_INPUT_REG`: 15 odd input register s
+- `WARN_ODD_ADDR_USE`: 16 odd use of a variable address
+- `WARN_MUST_RET_FP`: 17 function return type is incorrect (must be floating point)
+- `WARN_ILL_FPU_STACK`: 18 inconsistent fpu stack
+- `WARN_SELFREF_PROP`: 19 self-referencing variable has been detected
+- `WARN_WOULD_OVERLAP`: 20 variables would overlap: s
+- `WARN_ARRAY_INARG`: 21 array has been used for an input argument
+- `WARN_MAX_ARGS`: 22 too many input arguments, some ignored
+- `WARN_BAD_FIELD_TYPE`: 23 incorrect structure member type for s::s, ignored
+- `WARN_WRITE_CONST`: 24 write access to const memory at a has been detected
+- `WARN_BAD_RETVAR`: 25 wrong return variable
+- `WARN_FRAG_LVAR`: 26 fragmented variable at s may be wrong
+- `WARN_HUGE_STKOFF`: 27 exceedingly huge offset into the stack frame
+- `WARN_UNINITED_REG`: 28 reference to an uninitialized register has been removed: s
+- `WARN_FIXED_INSN`: 29 fixed broken insn
+- `WARN_WRONG_VA_OFF`: 30 wrong offset of va_list variable
+- `WARN_CR_NOFIELD`: 31 CONTAINING_RECORD: no field 's' in struct 's' at d
+- `WARN_CR_BADOFF`: 32 CONTAINING_RECORD: too small offset d for struct 's'
+- `WARN_BAD_STROFF`: 33 user specified stroff has not been processed: s
+- `WARN_BAD_VARSIZE`: 34 inconsistent variable size for 's'
+- `WARN_UNSUPP_REG`: 35 unsupported processor register 's'
+- `WARN_UNALIGNED_ARG`: 36 unaligned function argument 's'
+- `WARN_BAD_STD_TYPE`: 37 corrupted or unexisting local type 's'
+- `WARN_BAD_CALL_SP`: 38 bad sp value at call
+- `WARN_MISSED_SWITCH`: 39 wrong markup of switch jump, skipped it
+- `WARN_BAD_SP`: 40 positive sp value a has been found
+- `WARN_BAD_STKPNT`: 41 wrong sp change point
+- `WARN_UNDEF_LVAR`: 42 variable 's' is possibly undefined
+- `WARN_JUMPOUT`: 43 control flows out of bounds
+- `WARN_BAD_VALRNG`: 44 values range analysis failed
+- `WARN_BAD_SHADOW`: 45 ignored the value written to the shadow area of the succeeding call
+- `WARN_OPT_VALRNG`: 46 conditional instruction was optimized away because s
+- `WARN_RET_LOCREF`: 47 returning address of temporary local variable 's'
+- `WARN_BAD_MAPDST`: 48 too short map destination 's' for variable 's'
+- `WARN_BAD_INSN`: 49 bad instruction
+- `WARN_ODD_ABI`: 50 encountered odd instruction for the current ABI
+- `WARN_UNBALANCED_STACK`: 51 unbalanced stack, ignored a potential tail call
+- `WARN_OPT_VALRNG2`: 52 mask 0xX is shortened because s <= 0xX"
+- `WARN_OPT_VALRNG3`: 53 masking with 0XX was optimized away because s <= 0xX
+- `WARN_OPT_USELESS_JCND`: 54 simplified comparisons for 's': s became s
+- `WARN_SUBFRAME_OVERFLOW`: 55 call arguments overflow the function chunk frame
+- `WARN_OPT_VALRNG4`: 56 the cases s were optimized away because s
+- `WARN_MAX`: may be used in notes as a placeholder when the warning id is not available
+- `MMAT_ZERO`: microcode does not exist
+- `MMAT_GENERATED`: generated microcode
+- `MMAT_PREOPTIMIZED`: preoptimized pass is complete
+- `MMAT_LOCOPT`: local optimization of each basic block is complete. control flow graph is ready too.
+- `MMAT_CALLS`: detected call arguments. see also hxe_calls_done
+- `MMAT_GLBOPT1`: performed the first pass of global optimization
+- `MMAT_GLBOPT2`: most global optimization passes are done
+- `MMAT_GLBOPT3`: completed all global optimization. microcode is fixed now.
+- `MMAT_LVARS`: allocated local variables
+- `MMIDX_GLBLOW`: global memory: low part
+- `MMIDX_LVARS`: stack: local variables
+- `MMIDX_RETADDR`: stack: return address
+- `MMIDX_SHADOW`: stack: shadow arguments
+- `MMIDX_ARGS`: stack: regular stack arguments
+- `MMIDX_GLBHIGH`: global memory: high part
+- `MBA_PRCDEFS`: use precise defeas for chain-allocated lvars
+- `MBA_NOFUNC`: function is not present, addresses might be wrong
+- `MBA_PATTERN`: microcode pattern, callinfo is present
+- `MBA_LOADED`: loaded gdl, no instructions (debugging)
+- `MBA_RETFP`: function returns floating point value
+- `MBA_SPLINFO`: (final_type ? idb_spoiled : spoiled_regs) is valid
+- `MBA_PASSREGS`: has mcallinfo_t::pass_regs
+- `MBA_THUNK`: thunk function
+- `MBA_CMNSTK`: stkvars+stkargs should be considered as one area
+- `MBA_PREOPT`: preoptimization stage complete
+- `MBA_CMBBLK`: request to combine blocks
+- `MBA_ASRTOK`: assertions have been generated
+- `MBA_CALLS`: callinfo has been built
+- `MBA_ASRPROP`: assertion have been propagated
+- `MBA_SAVRST`: save-restore analysis has been performed
+- `MBA_RETREF`: return type has been refined
+- `MBA_GLBOPT`: microcode has been optimized globally
+- `MBA_LVARS0`: lvar pre-allocation has been performed
+- `MBA_LVARS1`: lvar real allocation has been performed
+- `MBA_DELPAIRS`: pairs have been deleted once
+- `MBA_CHVARS`: can verify chain varnums
+- `MBA_SHORT`: use short display
+- `MBA_COLGDL`: display graph after each reduction
+- `MBA_INSGDL`: display instruction in graphs
+- `MBA_NICE`: apply transformations to c code
+- `MBA_REFINE`: may refine return value size
+- `MBA_WINGR32`: use wingraph32
+- `MBA_NUMADDR`: display definition addresses for numbers
+- `MBA_VALNUM`: display value numbers
+- `MBA_INITIAL_FLAGS`
+- `MBA2_LVARNAMES_OK`: may verify lvar_names?
+- `MBA2_LVARS_RENAMED`: accept empty names now?
+- `MBA2_OVER_CHAINS`: has overlapped chains?
+- `MBA2_VALRNG_DONE`: calculated valranges?
+- `MBA2_IS_CTR`: is constructor?
+- `MBA2_IS_DTR`: is destructor?
+- `MBA2_ARGIDX_OK`: may verify input argument list?
+- `MBA2_NO_DUP_CALLS`: forbid multiple calls with the same ea
+- `MBA2_NO_DUP_LVARS`: forbid multiple lvars with the same ea
+- `MBA2_UNDEF_RETVAR`: return value is undefined
+- `MBA2_ARGIDX_SORTED`: args finally sorted according to ABI (e.g. reverse stkarg order in Borland)
+- `MBA2_CODE16_BIT`: the code16 bit got removed
+- `MBA2_STACK_RETVAL`: the return value (or its part) is on the stack
+- `MBA2_HAS_OUTLINES`: calls to outlined code have been inlined
+- `MBA2_NO_FRAME`: do not use function frame info (only snippet mode)
+- `MBA2_PROP_COMPLEX`: allow propagation of more complex variable definitions
+- `MBA2_DONT_VERIFY`: Do not verify microcode. This flag is recomended to be set only when debugging decompiler plugins
+- `MBA2_INITIAL_FLAGS`
+- `MBA2_ALL_FLAGS`
+- `NALT_VD`: this index is not used by ida
+- `LOCOPT_ALL`: redo optimization for all blocks. if this bit is not set, only dirty blocks will be optimized
+- `LOCOPT_REFINE`: refine return type, ok to fail
+- `LOCOPT_REFINE2`: refine return type, try harder
+- `ACFL_LOCOPT`: perform local propagation (requires ACFL_BLKOPT)
+- `ACFL_BLKOPT`: perform interblock transformations
+- `ACFL_GLBPROP`: perform global propagation
+- `ACFL_GLBDEL`: perform dead code eliminition
+- `ACFL_GUESS`: may guess calling conventions
+- `CPBLK_FAST`: do not update minbstkref and minbargref
+- `CPBLK_MINREF`: update minbstkref and minbargref
+- `CPBLK_OPTJMP`: del the jump insn at the end of the block if it becomes useless
+- `INLINE_EXTFRAME`: Inlined function has its own (external) frame.
+- `INLINE_DONTCOPY`: Do not reuse old inlined copy even if it exists.
+- `GC_REGS_AND_STKVARS`: registers and stkvars (restricted memory only)
+- `GC_ASR`: all the above and assertions
+- `GC_XDSU`: only registers calculated with FULL_XDSU
+- `GC_END`: number of chain types
+- `GC_DIRTY_ALL`: bitmask to represent all chains
+- `OPF_REUSE`: reuse existing window
+- `OPF_NEW_WINDOW`: open new window
+- `OPF_REUSE_ACTIVE`: reuse existing window, only if the currently active widget is a pseudocode view
+- `OPF_NO_WAIT`: do not display waitbox if decompilation happens
+- `OPF_WINDOW_MGMT_MASK`
+- `VDRUN_NEWFILE`: Create a new file or overwrite existing file.
+- `VDRUN_APPEND`: Create a new file or append to existing file.
+- `VDRUN_ONLYNEW`: Fail if output file already exists.
+- `VDRUN_SILENT`: Silent decompilation.
+- `VDRUN_SENDIDB`: Send problematic databases to hex-rays.com.
+- `VDRUN_MAYSTOP`: The user can cancel decompilation.
+- `VDRUN_CMDLINE`: Called from ida's command line.
+- `VDRUN_STATS`: Print statistics into vd_stats.txt.
+- `VDRUN_LUMINA`: Use lumina server.
+- `VDRUN_PERF`: Print performance stats to ida.log.
+- `GCO_STK`: a stack variable
+- `GCO_REG`: is register? otherwise a stack variable
+- `GCO_USE`: is source operand?
+- `GCO_DEF`: is destination operand?
+- `cot_empty`
+- `cot_comma`: x, y
+- `cot_asg`: x = y
+- `cot_asgbor`: x |= y
+- `cot_asgxor`: x ^= y
+- `cot_asgband`: x &= y
+- `cot_asgadd`: x += y
+- `cot_asgsub`: x -= y
+- `cot_asgmul`: x *= y
+- `cot_asgsshr`: x >>= y signed
+- `cot_asgushr`: x >>= y unsigned
+- `cot_asgshl`: x <<= y
+- `cot_asgsdiv`: x /= y signed
+- `cot_asgudiv`: x /= y unsigned
+- `cot_asgsmod`: x %= y signed
+- `cot_asgumod`: x %= y unsigned
+- `cot_tern`: x ? y : z
+- `cot_lor`: x || y
+- `cot_land`: x && y
+- `cot_bor`: x | y
+- `cot_xor`: x ^ y
+- `cot_band`: x & y
+- `cot_eq`: x == y int or fpu (see EXFL_FPOP)
+- `cot_ne`: x != y int or fpu (see EXFL_FPOP)
+- `cot_sge`: x >= y signed or fpu (see EXFL_FPOP)
+- `cot_uge`: x >= y unsigned
+- `cot_sle`: x <= y signed or fpu (see EXFL_FPOP)
+- `cot_ule`: x <= y unsigned
+- `cot_sgt`: x > y signed or fpu (see EXFL_FPOP)
+- `cot_ugt`: x > y unsigned
+- `cot_slt`: x < y signed or fpu (see EXFL_FPOP)
+- `cot_ult`: x < y unsigned
+- `cot_sshr`: x >> y signed
+- `cot_ushr`: x >> y unsigned
+- `cot_shl`: x << y
+- `cot_add`: x + y
+- `cot_sub`: x - y
+- `cot_mul`: x * y
+- `cot_sdiv`: x / y signed
+- `cot_udiv`: x / y unsigned
+- `cot_smod`: x % y signed
+- `cot_umod`: x % y unsigned
+- `cot_fadd`: x + y fp
+- `cot_fsub`: x - y fp
+- `cot_fmul`: x * y fp
+- `cot_fdiv`: x / y fp
+- `cot_fneg`: -x fp
+- `cot_neg`: -x
+- `cot_cast`: (type)x
+- `cot_lnot`: !x
+- `cot_bnot`: ~x
+- `cot_ptr`: *x, access size in 'ptrsize'
+- `cot_ref`: &x
+- `cot_postinc`: x++
+- `cot_postdec`: x-
+- `cot_preinc`: ++x
+- `cot_predec`: -x
+- `cot_call`: x(...)
+- `cot_idx`: x[y]
+- `cot_memref`: x.m
+- `cot_memptr`: x->m, access size in 'ptrsize'
+- `cot_num`: n
+- `cot_fnum`: fpc
+- `cot_str`: string constant (user representation)
+- `cot_obj`: obj_ea
+- `cot_var`: v
+- `cot_insn`: instruction in expression, internal representation only
+- `cot_sizeof`: sizeof(x)
+- `cot_helper`: arbitrary name
+- `cot_type`: arbitrary type
+- `cot_last`
+- `cit_empty`: instruction types start here
+- `cit_block`: block-statement: { ... }
+- `cit_expr`: expression-statement: expr;
+- `cit_if`: if-statement
+- `cit_for`: for-statement
+- `cit_while`: while-statement
+- `cit_do`: do-statement
+- `cit_switch`: switch-statement
+- `cit_break`: break-statement
+- `cit_continue`: continue-statement
+- `cit_return`: return-statement
+- `cit_goto`: goto-statement
+- `cit_asm`: asm-statement
+- `cit_try`: C++ try-statement.
+- `cit_throw`: C++ throw-statement.
+- `cit_end`
+- `CMAT_ZERO`: does not exist
+- `CMAT_BUILT`: just generated
+- `CMAT_TRANS1`: applied first wave of transformations
+- `CMAT_NICE`: nicefied expressions
+- `CMAT_TRANS2`: applied second wave of transformations
+- `CMAT_CPA`: corrected pointer arithmetic
+- `CMAT_TRANS3`: applied third wave of transformations
+- `CMAT_CASTED`: added necessary casts
+- `CMAT_FINAL`: ready-to-use
+- `ITP_EMPTY`: nothing
+- `ITP_ARG1`: , (64 entries are reserved for 64 call arguments)
+- `ITP_ARG64`
+- `ITP_BRACE1`
+- `ITP_INNER_LAST`
+- `ITP_ASM`: __asm-line
+- `ITP_ELSE`: else-line
+- `ITP_DO`: do-line
+- `ITP_SEMI`: semicolon
+- `ITP_CURLY1`
+- `ITP_CURLY2`
+- `ITP_BRACE2`
+- `ITP_COLON`: : (label)
+- `ITP_BLOCK1`: opening block comment. this comment is printed before the item (other comments are indented and printed after the item)
+- `ITP_BLOCK2`: closing block comment.
+- `ITP_TRY`: C++ try statement.
+- `ITP_CASE`: bit for switch cases
+- `ITP_SIGN`: if this bit is set too, then we have a negative case value
+- `RETRIEVE_ONCE`: Retrieve comment if it has not been used yet.
+- `RETRIEVE_ALWAYS`: Retrieve comment even if it has been used.
+- `EXFL_CPADONE`: pointer arithmetic correction done
+- `EXFL_LVALUE`: expression is lvalue even if it doesn't look like it
+- `EXFL_FPOP`: floating point operation
+- `EXFL_ALONE`: standalone helper
+- `EXFL_CSTR`: string literal
+- `EXFL_PARTIAL`: type of the expression is considered partial
+- `EXFL_UNDEF`: expression uses undefined value
+- `EXFL_JUMPOUT`: jump out-of-function
+- `EXFL_VFTABLE`: is ptr to vftable (used for cot_memptr, cot_memref)
+- `EXFL_ALL`: all currently defined bits
+- `CALC_CURLY_BRACES`: print curly braces if necessary
+- `NO_CURLY_BRACES`: don't print curly braces
+- `USE_CURLY_BRACES`: print curly braces without any checks
+- `CFL_FINAL`: call type is final, should not be changed
+- `CFL_HELPER`: created from a decompiler helper function
+- `CFL_NORET`: call does not return
+- `CV_FAST`: do not maintain parent information
+- `CV_PRUNE`: this bit is set by visit...() to prune the walk
+- `CV_PARENTS`: maintain parent information
+- `CV_POST`: call the leave...() functions
+- `CV_RESTART`: restart enumeration at the top expr (apply_to_exprs)
+- `CV_INSNS`: visit only statements, prune all expressions do not use before the final ctree maturity because expressions may contain statements at intermediate stages (see cot_insn). Otherwise you risk missing statements embedded into expressions.
+- `ANCHOR_INDEX`
+- `ANCHOR_MASK`
+- `ANCHOR_CITEM`: c-tree item
+- `ANCHOR_LVAR`: declaration of local variable
+- `ANCHOR_ITP`: item type preciser
+- `ANCHOR_BLKCMT`: block comment (for ctree items)
+- `VDI_NONE`: undefined
+- `VDI_EXPR`: c-tree item
+- `VDI_LVAR`: declaration of local variable
+- `VDI_FUNC`: the function itself (the very first line with the function prototype)
+- `VDI_TAIL`: cursor is at (beyond) the line end (commentable line)
+- `GLN_CURRENT`: get label of the current item
+- `GLN_GOTO_TARGET`: get goto target
+- `GLN_ALL`: get both
+- `FORBID_UNUSED_LABELS`: Unused labels cause interr.
+- `ALLOW_UNUSED_LABELS`: Unused labels are permitted.
+- `CIT_COLLAPSED`: display ctree item in collapsed form
+- `CFS_BOUNDS`: 'eamap' and 'boundaries' are ready
+- `CFS_TEXT`: 'sv' is ready (and hdrlines)
+- `CFS_LVARS_HIDDEN`: local variable definitions are collapsed
+- `CFS_LOCKED`: cfunc is temporarily locked
+- `DECOMP_NO_WAIT`: do not display waitbox
+- `DECOMP_NO_CACHE`: do not use decompilation cache (snippets are never cached)
+- `DECOMP_NO_FRAME`: do not use function frame info (only snippet mode)
+- `DECOMP_WARNINGS`: display warnings in the output window
+- `DECOMP_ALL_BLKS`: generate microcode for unreachable blocks
+- `DECOMP_NO_HIDE`: do not close display waitbox. see close_hexrays_waitbox()
+- `DECOMP_GXREFS_DEFLT`: the default behavior: do not update the global xrefs cache upon decompile() call, but when the pseudocode text is generated (e.g., through cfunc_t.get_pseudocode())
+- `DECOMP_GXREFS_NOUPD`: do not update the global xrefs cache
+- `DECOMP_GXREFS_FORCE`: update the global xrefs cache immediately
+- `DECOMP_VOID_MBA`: return empty mba object (to be used with gen_microcode)
+- `DECOMP_OUTLINE`: generate code for an outline
+- `hxe_flowchart`: Flowchart has been generated.
+- `hxe_stkpnts`: SP change points have been calculated.
+- `hxe_prolog`: Prolog analysis has been finished.
+- `hxe_microcode`: Microcode has been generated.
+- `hxe_preoptimized`: Microcode has been preoptimized.
+- `hxe_locopt`: Basic block level optimization has been finished.
+- `hxe_prealloc`: Local variables: preallocation step begins.
+- `hxe_glbopt`: Global optimization has been finished. If microcode is modified, MERR_LOOP must be returned. It will cause a complete restart of the optimization.
+- `hxe_pre_structural`: Structure analysis is starting.
+- `hxe_structural`: Structural analysis has been finished.
+- `hxe_maturity`: Ctree maturity level is being changed.
+- `hxe_interr`: Internal error has occurred.
+- `hxe_combine`: Trying to combine instructions of basic block.
+- `hxe_print_func`: Printing ctree and generating text.
+- `hxe_func_printed`: Function text has been generated. Plugins may modify the text in cfunc_t::sv. However, it is too late to modify the ctree or microcode. The text uses regular color codes (see lines.hpp) COLOR_ADDR is used to store pointers to ctree items.
+- `hxe_resolve_stkaddrs`: The optimizer is about to resolve stack addresses.
+- `hxe_build_callinfo`: Analyzing a call instruction.
+- `hxe_callinfo_built`: A call instruction has been anallyzed.
+- `hxe_calls_done`: All calls have been analyzed.
+- `hxe_begin_inlining`: Starting to inline outlined functions.
+- `hxe_inlining_func`: A set of ranges is going to be inlined.
+- `hxe_inlined_func`: A set of ranges got inlined.
+- `hxe_collect_warnings`: Collect warning messages from plugins. These warnings will be displayed at the function header, after the user-defined comments.
+- `hxe_open_pseudocode`: New pseudocode view has been opened.
+- `hxe_switch_pseudocode`: Existing pseudocode view has been reloaded with a new function. Its text has not been refreshed yet, only cfunc and mba pointers are ready.
+- `hxe_refresh_pseudocode`: Existing pseudocode text has been refreshed. Adding/removing pseudocode lines is forbidden in this event.
+- `hxe_close_pseudocode`: Pseudocode view is being closed.
+- `hxe_keyboard`: Keyboard has been hit.
+- `hxe_right_click`: Mouse right click. Use hxe_populating_popup instead, in case you want to add items in the popup menu.
+- `hxe_double_click`: Mouse double click.
+- `hxe_curpos`: Current cursor position has been changed. (for example, by left-clicking or using keyboard)
+- `hxe_create_hint`: Create a hint for the current item.
+- `hxe_text_ready`: Decompiled text is ready.
+- `hxe_populating_popup`: Populating popup menu. We can add menu items now.
+- `lxe_lvar_name_changed`: Local variable got renamed.
+- `lxe_lvar_type_changed`: Local variable type got changed.
+- `lxe_lvar_cmt_changed`: Local variable comment got changed.
+- `lxe_lvar_mapping_changed`: Local variable mapping got changed.
+- `hxe_cmt_changed`: Comment got changed.
+- `hxe_mba_maturity`: Maturity level of an MBA was changed.
+- `USE_KEYBOARD`: Keyboard.
+- `USE_MOUSE`: Mouse.
+- `HEXRAYS_API_MAGIC`
+- `CMT_NONE`: No comment is possible.
+- `CMT_TAIL`: Indented comment.
+- `CMT_BLOCK1`: Anterioir block comment.
+- `CMT_BLOCK2`: Posterior block comment.
+- `CMT_LVAR`: Local variable comment.
+- `CMT_FUNC`: Function comment.
+- `CMT_ALL`: All comments.
+- `VDUI_VISIBLE`: is visible?
+- `VDUI_VALID`: is valid?
+- `hx_user_numforms_begin`
+- `hx_user_numforms_end`
+- `hx_user_numforms_next`
+- `hx_user_numforms_prev`
+- `hx_user_numforms_first`
+- `hx_user_numforms_second`
+- `hx_user_numforms_find`
+- `hx_user_numforms_insert`
+- `hx_user_numforms_erase`
+- `hx_user_numforms_clear`
+- `hx_user_numforms_size`
+- `hx_user_numforms_free`
+- `hx_user_numforms_new`
+- `hx_lvar_mapping_begin`
+- `hx_lvar_mapping_end`
+- `hx_lvar_mapping_next`
+- `hx_lvar_mapping_prev`
+- `hx_lvar_mapping_first`
+- `hx_lvar_mapping_second`
+- `hx_lvar_mapping_find`
+- `hx_lvar_mapping_insert`
+- `hx_lvar_mapping_erase`
+- `hx_lvar_mapping_clear`
+- `hx_lvar_mapping_size`
+- `hx_lvar_mapping_free`
+- `hx_lvar_mapping_new`
+- `hx_udcall_map_begin`
+- `hx_udcall_map_end`
+- `hx_udcall_map_next`
+- `hx_udcall_map_prev`
+- `hx_udcall_map_first`
+- `hx_udcall_map_second`
+- `hx_udcall_map_find`
+- `hx_udcall_map_insert`
+- `hx_udcall_map_erase`
+- `hx_udcall_map_clear`
+- `hx_udcall_map_size`
+- `hx_udcall_map_free`
+- `hx_udcall_map_new`
+- `hx_user_cmts_begin`
+- `hx_user_cmts_end`
+- `hx_user_cmts_next`
+- `hx_user_cmts_prev`
+- `hx_user_cmts_first`
+- `hx_user_cmts_second`
+- `hx_user_cmts_find`
+- `hx_user_cmts_insert`
+- `hx_user_cmts_erase`
+- `hx_user_cmts_clear`
+- `hx_user_cmts_size`
+- `hx_user_cmts_free`
+- `hx_user_cmts_new`
+- `hx_user_iflags_begin`
+- `hx_user_iflags_end`
+- `hx_user_iflags_next`
+- `hx_user_iflags_prev`
+- `hx_user_iflags_first`
+- `hx_user_iflags_second`
+- `hx_user_iflags_find`
+- `hx_user_iflags_insert`
+- `hx_user_iflags_erase`
+- `hx_user_iflags_clear`
+- `hx_user_iflags_size`
+- `hx_user_iflags_free`
+- `hx_user_iflags_new`
+- `hx_user_unions_begin`
+- `hx_user_unions_end`
+- `hx_user_unions_next`
+- `hx_user_unions_prev`
+- `hx_user_unions_first`
+- `hx_user_unions_second`
+- `hx_user_unions_find`
+- `hx_user_unions_insert`
+- `hx_user_unions_erase`
+- `hx_user_unions_clear`
+- `hx_user_unions_size`
+- `hx_user_unions_free`
+- `hx_user_unions_new`
+- `hx_user_labels_begin`
+- `hx_user_labels_end`
+- `hx_user_labels_next`
+- `hx_user_labels_prev`
+- `hx_user_labels_first`
+- `hx_user_labels_second`
+- `hx_user_labels_find`
+- `hx_user_labels_insert`
+- `hx_user_labels_erase`
+- `hx_user_labels_clear`
+- `hx_user_labels_size`
+- `hx_user_labels_free`
+- `hx_user_labels_new`
+- `hx_eamap_begin`
+- `hx_eamap_end`
+- `hx_eamap_next`
+- `hx_eamap_prev`
+- `hx_eamap_first`
+- `hx_eamap_second`
+- `hx_eamap_find`
+- `hx_eamap_insert`
+- `hx_eamap_erase`
+- `hx_eamap_clear`
+- `hx_eamap_size`
+- `hx_eamap_free`
+- `hx_eamap_new`
+- `hx_boundaries_begin`
+- `hx_boundaries_end`
+- `hx_boundaries_next`
+- `hx_boundaries_prev`
+- `hx_boundaries_first`
+- `hx_boundaries_second`
+- `hx_boundaries_find`
+- `hx_boundaries_insert`
+- `hx_boundaries_erase`
+- `hx_boundaries_clear`
+- `hx_boundaries_size`
+- `hx_boundaries_free`
+- `hx_boundaries_new`
+- `hx_block_chains_begin`
+- `hx_block_chains_end`
+- `hx_block_chains_next`
+- `hx_block_chains_prev`
+- `hx_block_chains_get`
+- `hx_block_chains_find`
+- `hx_block_chains_insert`
+- `hx_block_chains_erase`
+- `hx_block_chains_clear`
+- `hx_block_chains_size`
+- `hx_block_chains_free`
+- `hx_block_chains_new`
+- `hx_hexrays_alloc`
+- `hx_hexrays_free`
+- `hx_valrng_t_clear`
+- `hx_valrng_t_copy`
+- `hx_valrng_t_assign`
+- `hx_valrng_t_compare`
+- `hx_valrng_t_set_eq`
+- `hx_valrng_t_set_cmp`
+- `hx_valrng_t_reduce_size`
+- `hx_valrng_t_intersect_with`
+- `hx_valrng_t_unite_with`
+- `hx_valrng_t_inverse`
+- `hx_valrng_t_has`
+- `hx_valrng_t_print`
+- `hx_valrng_t_dstr`
+- `hx_valrng_t_cvt_to_single_value`
+- `hx_valrng_t_cvt_to_cmp`
+- `hx_get_merror_desc`
+- `hx_must_mcode_close_block`
+- `hx_is_mcode_propagatable`
+- `hx_negate_mcode_relation`
+- `hx_swap_mcode_relation`
+- `hx_get_signed_mcode`
+- `hx_get_unsigned_mcode`
+- `hx_mcode_modifies_d`
+- `hx_operand_locator_t_compare`
+- `hx_vd_printer_t_print`
+- `hx_file_printer_t_print`
+- `hx_qstring_printer_t_print`
+- `hx_dstr`
+- `hx_is_type_correct`
+- `hx_is_small_udt`
+- `hx_is_nonbool_type`
+- `hx_is_bool_type`
+- `hx_partial_type_num`
+- `hx_get_float_type`
+- `hx_get_int_type_by_width_and_sign`
+- `hx_get_unk_type`
+- `hx_dummy_ptrtype`
+- `hx_get_member_type`
+- `hx_make_pointer`
+- `hx_create_typedef`
+- `hx_get_type`
+- `hx_set_type`
+- `hx_vdloc_t_dstr`
+- `hx_vdloc_t_compare`
+- `hx_vdloc_t_is_aliasable`
+- `hx_print_vdloc`
+- `hx_arglocs_overlap`
+- `hx_lvar_locator_t_compare`
+- `hx_lvar_locator_t_dstr`
+- `hx_lvar_t_dstr`
+- `hx_lvar_t_is_promoted_arg`
+- `hx_lvar_t_accepts_type`
+- `hx_lvar_t_set_lvar_type`
+- `hx_lvar_t_set_width`
+- `hx_lvar_t_append_list`
+- `hx_lvar_t_append_list_`
+- `hx_lvars_t_find_stkvar`
+- `hx_lvars_t_find`
+- `hx_lvars_t_find_lvar`
+- `hx_restore_user_lvar_settings`
+- `hx_save_user_lvar_settings`
+- `hx_modify_user_lvars`
+- `hx_modify_user_lvar_info`
+- `hx_locate_lvar`
+- `hx_restore_user_defined_calls`
+- `hx_save_user_defined_calls`
+- `hx_parse_user_call`
+- `hx_convert_to_user_call`
+- `hx_install_microcode_filter`
+- `hx_udc_filter_t_cleanup`
+- `hx_udc_filter_t_init`
+- `hx_udc_filter_t_apply`
+- `hx_bitset_t_bitset_t`
+- `hx_bitset_t_copy`
+- `hx_bitset_t_add`
+- `hx_bitset_t_add_`
+- `hx_bitset_t_add__`
+- `hx_bitset_t_sub`
+- `hx_bitset_t_sub_`
+- `hx_bitset_t_sub__`
+- `hx_bitset_t_cut_at`
+- `hx_bitset_t_shift_down`
+- `hx_bitset_t_has`
+- `hx_bitset_t_has_all`
+- `hx_bitset_t_has_any`
+- `hx_bitset_t_dstr`
+- `hx_bitset_t_empty`
+- `hx_bitset_t_count`
+- `hx_bitset_t_count_`
+- `hx_bitset_t_last`
+- `hx_bitset_t_fill_with_ones`
+- `hx_bitset_t_fill_gaps`
+- `hx_bitset_t_has_common`
+- `hx_bitset_t_intersect`
+- `hx_bitset_t_is_subset_of`
+- `hx_bitset_t_compare`
+- `hx_bitset_t_goup`
+- `hx_ivl_t_dstr`
+- `hx_ivl_t_compare`
+- `hx_ivlset_t_add`
+- `hx_ivlset_t_add_`
+- `hx_ivlset_t_addmasked`
+- `hx_ivlset_t_sub`
+- `hx_ivlset_t_sub_`
+- `hx_ivlset_t_has_common`
+- `hx_ivlset_t_print`
+- `hx_ivlset_t_dstr`
+- `hx_ivlset_t_count`
+- `hx_ivlset_t_has_common_`
+- `hx_ivlset_t_contains`
+- `hx_ivlset_t_includes`
+- `hx_ivlset_t_intersect`
+- `hx_ivlset_t_compare`
+- `hx_rlist_t_print`
+- `hx_rlist_t_dstr`
+- `hx_mlist_t_addmem`
+- `hx_mlist_t_print`
+- `hx_mlist_t_dstr`
+- `hx_mlist_t_compare`
+- `hx_get_temp_regs`
+- `hx_is_kreg`
+- `hx_reg2mreg`
+- `hx_mreg2reg`
+- `hx_get_mreg_name`
+- `hx_install_optinsn_handler`
+- `hx_remove_optinsn_handler`
+- `hx_install_optblock_handler`
+- `hx_remove_optblock_handler`
+- `hx_simple_graph_t_compute_dominators`
+- `hx_simple_graph_t_compute_immediate_dominators`
+- `hx_simple_graph_t_depth_first_preorder`
+- `hx_simple_graph_t_depth_first_postorder`
+- `hx_simple_graph_t_goup`
+- `hx_mutable_graph_t_resize`
+- `hx_mutable_graph_t_goup`
+- `hx_mutable_graph_t_del_edge`
+- `hx_lvar_ref_t_compare`
+- `hx_lvar_ref_t_var`
+- `hx_stkvar_ref_t_compare`
+- `hx_stkvar_ref_t_get_stkvar`
+- `hx_fnumber_t_print`
+- `hx_fnumber_t_dstr`
+- `hx_mop_t_copy`
+- `hx_mop_t_assign`
+- `hx_mop_t_swap`
+- `hx_mop_t_erase`
+- `hx_mop_t_print`
+- `hx_mop_t_dstr`
+- `hx_mop_t_create_from_mlist`
+- `hx_mop_t_create_from_ivlset`
+- `hx_mop_t_create_from_vdloc`
+- `hx_mop_t_create_from_scattered_vdloc`
+- `hx_mop_t_create_from_insn`
+- `hx_mop_t_make_number`
+- `hx_mop_t_make_fpnum`
+- `hx_mop_t__make_gvar`
+- `hx_mop_t_make_gvar`
+- `hx_mop_t_make_reg_pair`
+- `hx_mop_t_make_helper`
+- `hx_mop_t_is_bit_reg`
+- `hx_mop_t_may_use_aliased_memory`
+- `hx_mop_t_is01`
+- `hx_mop_t_is_sign_extended_from`
+- `hx_mop_t_is_zero_extended_from`
+- `hx_mop_t_equal_mops`
+- `hx_mop_t_lexcompare`
+- `hx_mop_t_for_all_ops`
+- `hx_mop_t_for_all_scattered_submops`
+- `hx_mop_t_is_constant`
+- `hx_mop_t_get_stkoff`
+- `hx_mop_t_make_low_half`
+- `hx_mop_t_make_high_half`
+- `hx_mop_t_make_first_half`
+- `hx_mop_t_make_second_half`
+- `hx_mop_t_shift_mop`
+- `hx_mop_t_change_size`
+- `hx_mop_t_preserve_side_effects`
+- `hx_mop_t_apply_ld_mcode`
+- `hx_mcallarg_t_print`
+- `hx_mcallarg_t_dstr`
+- `hx_mcallarg_t_set_regarg`
+- `hx_mcallinfo_t_lexcompare`
+- `hx_mcallinfo_t_set_type`
+- `hx_mcallinfo_t_get_type`
+- `hx_mcallinfo_t_print`
+- `hx_mcallinfo_t_dstr`
+- `hx_mcases_t_compare`
+- `hx_mcases_t_print`
+- `hx_mcases_t_dstr`
+- `hx_vivl_t_extend_to_cover`
+- `hx_vivl_t_intersect`
+- `hx_vivl_t_print`
+- `hx_vivl_t_dstr`
+- `hx_chain_t_print`
+- `hx_chain_t_dstr`
+- `hx_chain_t_append_list`
+- `hx_chain_t_append_list_`
+- `hx_block_chains_t_get_chain`
+- `hx_block_chains_t_print`
+- `hx_block_chains_t_dstr`
+- `hx_graph_chains_t_for_all_chains`
+- `hx_graph_chains_t_release`
+- `hx_minsn_t_init`
+- `hx_minsn_t_copy`
+- `hx_minsn_t_set_combined`
+- `hx_minsn_t_swap`
+- `hx_minsn_t_print`
+- `hx_minsn_t_dstr`
+- `hx_minsn_t_setaddr`
+- `hx_minsn_t_optimize_subtree`
+- `hx_minsn_t_for_all_ops`
+- `hx_minsn_t_for_all_insns`
+- `hx_minsn_t__make_nop`
+- `hx_minsn_t_equal_insns`
+- `hx_minsn_t_lexcompare`
+- `hx_minsn_t_is_noret_call`
+- `hx_minsn_t_is_helper`
+- `hx_minsn_t_find_call`
+- `hx_minsn_t_has_side_effects`
+- `hx_minsn_t_find_opcode`
+- `hx_minsn_t_find_ins_op`
+- `hx_minsn_t_find_num_op`
+- `hx_minsn_t_modifies_d`
+- `hx_minsn_t_is_between`
+- `hx_minsn_t_may_use_aliased_memory`
+- `hx_minsn_t_serialize`
+- `hx_minsn_t_deserialize`
+- `hx_getf_reginsn`
+- `hx_getb_reginsn`
+- `hx_mblock_t_init`
+- `hx_mblock_t_print`
+- `hx_mblock_t_dump`
+- `hx_mblock_t_vdump_block`
+- `hx_mblock_t_insert_into_block`
+- `hx_mblock_t_remove_from_block`
+- `hx_mblock_t_for_all_insns`
+- `hx_mblock_t_for_all_ops`
+- `hx_mblock_t_for_all_uses`
+- `hx_mblock_t_optimize_insn`
+- `hx_mblock_t_optimize_block`
+- `hx_mblock_t_build_lists`
+- `hx_mblock_t_optimize_useless_jump`
+- `hx_mblock_t_append_use_list`
+- `hx_mblock_t_append_def_list`
+- `hx_mblock_t_build_use_list`
+- `hx_mblock_t_build_def_list`
+- `hx_mblock_t_find_first_use`
+- `hx_mblock_t_find_redefinition`
+- `hx_mblock_t_is_rhs_redefined`
+- `hx_mblock_t_find_access`
+- `hx_mblock_t_get_valranges`
+- `hx_mblock_t_get_valranges_`
+- `hx_mblock_t_get_reginsn_qty`
+- `hx_mba_ranges_t_range_contains`
+- `hx_mba_t_stkoff_vd2ida`
+- `hx_mba_t_stkoff_ida2vd`
+- `hx_mba_t_idaloc2vd`
+- `hx_mba_t_idaloc2vd_`
+- `hx_mba_t_vd2idaloc`
+- `hx_mba_t_vd2idaloc_`
+- `hx_mba_t_term`
+- `hx_mba_t_get_curfunc`
+- `hx_mba_t_set_maturity`
+- `hx_mba_t_optimize_local`
+- `hx_mba_t_build_graph`
+- `hx_mba_t_get_graph`
+- `hx_mba_t_analyze_calls`
+- `hx_mba_t_optimize_global`
+- `hx_mba_t_alloc_lvars`
+- `hx_mba_t_dump`
+- `hx_mba_t_vdump_mba`
+- `hx_mba_t_print`
+- `hx_mba_t_verify`
+- `hx_mba_t_mark_chains_dirty`
+- `hx_mba_t_insert_block`
+- `hx_mba_t_remove_block`
+- `hx_mba_t_copy_block`
+- `hx_mba_t_remove_empty_and_unreachable_blocks`
+- `hx_mba_t_merge_blocks`
+- `hx_mba_t_for_all_ops`
+- `hx_mba_t_for_all_insns`
+- `hx_mba_t_for_all_topinsns`
+- `hx_mba_t_find_mop`
+- `hx_mba_t_create_helper_call`
+- `hx_mba_t_get_func_output_lists`
+- `hx_mba_t_arg`
+- `hx_mba_t_alloc_fict_ea`
+- `hx_mba_t_map_fict_ea`
+- `hx_mba_t_serialize`
+- `hx_mba_t_deserialize`
+- `hx_mba_t_save_snapshot`
+- `hx_mba_t_alloc_kreg`
+- `hx_mba_t_free_kreg`
+- `hx_mba_t_inline_func`
+- `hx_mba_t_locate_stkpnt`
+- `hx_mba_t_set_lvar_name`
+- `hx_mbl_graph_t_is_accessed_globally`
+- `hx_mbl_graph_t_get_ud`
+- `hx_mbl_graph_t_get_du`
+- `hx_cdg_insn_iterator_t_next`
+- `hx_codegen_t_clear`
+- `hx_codegen_t_emit`
+- `hx_codegen_t_emit_`
+- `hx_change_hexrays_config`
+- `hx_get_hexrays_version`
+- `hx_open_pseudocode`
+- `hx_close_pseudocode`
+- `hx_get_widget_vdui`
+- `hx_decompile_many`
+- `hx_hexrays_failure_t_desc`
+- `hx_send_database`
+- `hx_gco_info_t_append_to_list`
+- `hx_get_current_operand`
+- `hx_remitem`
+- `hx_negated_relation`
+- `hx_swapped_relation`
+- `hx_get_op_signness`
+- `hx_asgop`
+- `hx_asgop_revert`
+- `hx_cnumber_t_print`
+- `hx_cnumber_t_value`
+- `hx_cnumber_t_assign`
+- `hx_cnumber_t_compare`
+- `hx_var_ref_t_compare`
+- `hx_ctree_visitor_t_apply_to`
+- `hx_ctree_visitor_t_apply_to_exprs`
+- `hx_ctree_parentee_t_recalc_parent_types`
+- `hx_cfunc_parentee_t_calc_rvalue_type`
+- `hx_citem_locator_t_compare`
+- `hx_citem_t_contains_expr`
+- `hx_citem_t_contains_label`
+- `hx_citem_t_find_parent_of`
+- `hx_citem_t_find_closest_addr`
+- `hx_cexpr_t_assign`
+- `hx_cexpr_t_compare`
+- `hx_cexpr_t_replace_by`
+- `hx_cexpr_t_cleanup`
+- `hx_cexpr_t_put_number`
+- `hx_cexpr_t_print1`
+- `hx_cexpr_t_calc_type`
+- `hx_cexpr_t_equal_effect`
+- `hx_cexpr_t_is_child_of`
+- `hx_cexpr_t_contains_operator`
+- `hx_cexpr_t_get_high_nbit_bound`
+- `hx_cexpr_t_get_low_nbit_bound`
+- `hx_cexpr_t_requires_lvalue`
+- `hx_cexpr_t_has_side_effects`
+- `hx_cexpr_t_maybe_ptr`
+- `hx_cexpr_t_dstr`
+- `hx_cif_t_assign`
+- `hx_cif_t_compare`
+- `hx_cloop_t_assign`
+- `hx_cfor_t_compare`
+- `hx_cwhile_t_compare`
+- `hx_cdo_t_compare`
+- `hx_creturn_t_compare`
+- `hx_cthrow_t_compare`
+- `hx_cgoto_t_compare`
+- `hx_casm_t_compare`
+- `hx_cinsn_t_assign`
+- `hx_cinsn_t_compare`
+- `hx_cinsn_t_replace_by`
+- `hx_cinsn_t_cleanup`
+- `hx_cinsn_t_new_insn`
+- `hx_cinsn_t_create_if`
+- `hx_cinsn_t_print`
+- `hx_cinsn_t_print1`
+- `hx_cinsn_t_is_ordinary_flow`
+- `hx_cinsn_t_contains_insn`
+- `hx_cinsn_t_collect_free_breaks`
+- `hx_cinsn_t_collect_free_continues`
+- `hx_cinsn_t_dstr`
+- `hx_cblock_t_compare`
+- `hx_carglist_t_compare`
+- `hx_ccase_t_compare`
+- `hx_ccases_t_compare`
+- `hx_cswitch_t_compare`
+- `hx_ccatch_t_compare`
+- `hx_ctry_t_compare`
+- `hx_ctree_item_t_get_udm`
+- `hx_ctree_item_t_get_edm`
+- `hx_ctree_item_t_get_lvar`
+- `hx_ctree_item_t_get_ea`
+- `hx_ctree_item_t_get_label_num`
+- `hx_ctree_item_t_print`
+- `hx_ctree_item_t_dstr`
+- `hx_lnot`
+- `hx_new_block`
+- `hx_vcreate_helper`
+- `hx_vcall_helper`
+- `hx_make_num`
+- `hx_make_ref`
+- `hx_dereference`
+- `hx_save_user_labels`
+- `hx_save_user_cmts`
+- `hx_save_user_numforms`
+- `hx_save_user_iflags`
+- `hx_save_user_unions`
+- `hx_restore_user_labels`
+- `hx_restore_user_cmts`
+- `hx_restore_user_numforms`
+- `hx_restore_user_iflags`
+- `hx_restore_user_unions`
+- `hx_cfunc_t_build_c_tree`
+- `hx_cfunc_t_verify`
+- `hx_cfunc_t_print_dcl`
+- `hx_cfunc_t_print_func`
+- `hx_cfunc_t_get_func_type`
+- `hx_cfunc_t_get_lvars`
+- `hx_cfunc_t_get_stkoff_delta`
+- `hx_cfunc_t_find_label`
+- `hx_cfunc_t_remove_unused_labels`
+- `hx_cfunc_t_get_user_cmt`
+- `hx_cfunc_t_set_user_cmt`
+- `hx_cfunc_t_get_user_iflags`
+- `hx_cfunc_t_set_user_iflags`
+- `hx_cfunc_t_has_orphan_cmts`
+- `hx_cfunc_t_del_orphan_cmts`
+- `hx_cfunc_t_get_user_union_selection`
+- `hx_cfunc_t_set_user_union_selection`
+- `hx_cfunc_t_save_user_labels`
+- `hx_cfunc_t_save_user_cmts`
+- `hx_cfunc_t_save_user_numforms`
+- `hx_cfunc_t_save_user_iflags`
+- `hx_cfunc_t_save_user_unions`
+- `hx_cfunc_t_get_line_item`
+- `hx_cfunc_t_get_warnings`
+- `hx_cfunc_t_get_eamap`
+- `hx_cfunc_t_get_boundaries`
+- `hx_cfunc_t_get_pseudocode`
+- `hx_cfunc_t_refresh_func_ctext`
+- `hx_cfunc_t_gather_derefs`
+- `hx_cfunc_t_find_item_coords`
+- `hx_cfunc_t_cleanup`
+- `hx_close_hexrays_waitbox`
+- `hx_decompile`
+- `hx_gen_microcode`
+- `hx_create_cfunc`
+- `hx_mark_cfunc_dirty`
+- `hx_clear_cached_cfuncs`
+- `hx_has_cached_cfunc`
+- `hx_get_ctype_name`
+- `hx_create_field_name`
+- `hx_install_hexrays_callback`
+- `hx_remove_hexrays_callback`
+- `hx_vdui_t_set_locked`
+- `hx_vdui_t_refresh_view`
+- `hx_vdui_t_refresh_ctext`
+- `hx_vdui_t_switch_to`
+- `hx_vdui_t_get_number`
+- `hx_vdui_t_get_current_label`
+- `hx_vdui_t_clear`
+- `hx_vdui_t_refresh_cpos`
+- `hx_vdui_t_get_current_item`
+- `hx_vdui_t_ui_rename_lvar`
+- `hx_vdui_t_rename_lvar`
+- `hx_vdui_t_ui_set_call_type`
+- `hx_vdui_t_ui_set_lvar_type`
+- `hx_vdui_t_set_lvar_type`
+- `hx_vdui_t_set_noptr_lvar`
+- `hx_vdui_t_ui_edit_lvar_cmt`
+- `hx_vdui_t_set_lvar_cmt`
+- `hx_vdui_t_ui_map_lvar`
+- `hx_vdui_t_ui_unmap_lvar`
+- `hx_vdui_t_map_lvar`
+- `hx_vdui_t_set_udm_type`
+- `hx_vdui_t_rename_udm`
+- `hx_vdui_t_set_global_type`
+- `hx_vdui_t_rename_global`
+- `hx_vdui_t_rename_label`
+- `hx_vdui_t_jump_enter`
+- `hx_vdui_t_ctree_to_disasm`
+- `hx_vdui_t_calc_cmt_type`
+- `hx_vdui_t_edit_cmt`
+- `hx_vdui_t_edit_func_cmt`
+- `hx_vdui_t_del_orphan_cmts`
+- `hx_vdui_t_set_num_radix`
+- `hx_vdui_t_set_num_enum`
+- `hx_vdui_t_set_num_stroff`
+- `hx_vdui_t_invert_sign`
+- `hx_vdui_t_invert_bits`
+- `hx_vdui_t_collapse_item`
+- `hx_vdui_t_collapse_lvars`
+- `hx_vdui_t_split_item`
+- `hx_select_udt_by_offset`
+- `hx_catchexpr_t_compare`
+- `hx_mba_t_split_block`
+- `hx_mba_t_remove_blocks`
+- `hx_cfunc_t_recalc_item_addresses`
+- `hx_int64_emulator_t_mop_value`
+- `hx_int64_emulator_t_minsn_value`
+- `is_allowed_on_small_struni`
+- `is_small_struni`
+- `mbl_array_t`
+
+## Classes Overview
+
+- `array_of_bitsets`
+- `mopvec_t`
+- `mcallargs_t`
+- `block_chains_vec_t`
+- `user_numforms_t`
+- `lvar_mapping_t`
+- `hexwarns_t`
+- `ctree_items_t`
+- `user_labels_t`
+- `user_cmts_t`
+- `user_iflags_t`
+- `user_unions_t`
+- `cinsnptrvec_t`
+- `eamap_t`
+- `boundaries_t`
+- `cfuncptr_t`
+- `qvector_history_t`
+- `history_t`
+- `cinsn_list_t_iterator`
+- `cinsn_list_t`
+- `qvector_lvar_t`
+- `qvector_carg_t`
+- `qvector_ccase_t`
+- `qvector_catchexprs_t`
+- `qvector_ccatchvec_t`
+- `cblock_posvec_t`
+- `lvar_saved_infos_t`
+- `ui_stroff_ops_t`
+- `Hexrays_Hooks`
+- `uval_ivl_t`
+- `uval_ivl_ivlset_t`
+- `array_of_ivlsets`
+- `valrng_t`
+- `operand_locator_t`
+- `number_format_t`
+- `vd_printer_t`
+- `vc_printer_t`
+- `qstring_printer_t`
+- `vdloc_t`
+- `lvar_locator_t`
+- `lvar_t`
+- `lvars_t`
+- `lvar_saved_info_t`
+- `lvar_uservec_t`
+- `user_lvar_modifier_t`
+- `udcall_t`
+- `microcode_filter_t`
+- `udc_filter_t`
+- `bitset_t`
+- `iterator`
+- `node_bitset_t`
+- `array_of_node_bitset_t`
+- `ivl_t`
+- `ivl_with_name_t`
+- `ivlset_t`
+- `rlist_t`
+- `mlist_t`
+- `optinsn_t`
+- `optblock_t`
+- `simple_graph_t`
+- `op_parent_info_t`
+- `minsn_visitor_t`
+- `mop_visitor_t`
+- `scif_visitor_t`
+- `mlist_mop_visitor_t`
+- `lvar_ref_t`
+- `stkvar_ref_t`
+- `scif_t`
+- `mnumber_t`
+- `fnumber_t`
+- `mop_t`
+- `mop_pair_t`
+- `mop_addr_t`
+- `mcallarg_t`
+- `mcallinfo_t`
+- `mcases_t`
+- `voff_t`
+- `vivl_t`
+- `chain_t`
+- `block_chains_t`
+- `chain_visitor_t`
+- `graph_chains_t`
+- `minsn_t`
+- `intval64_t`
+- `int64_emulator_t`
+- `mblock_t`
+- `hexwarn_t`
+- `mba_ranges_t`
+- `mba_range_iterator_t`
+- `mba_t`
+- `chain_keeper_t`
+- `mbl_graph_t`
+- `cdg_insn_iterator_t`
+- `codegen_t`
+- `hexrays_failure_t`
+- `vd_failure_t`
+- `vd_interr_t`
+- `gco_info_t`
+- `cnumber_t`
+- `var_ref_t`
+- `treeloc_t`
+- `citem_cmt_t`
+- `citem_locator_t`
+- `bit_bound_t`
+- `citem_t`
+- `cexpr_t`
+- `ceinsn_t`
+- `cif_t`
+- `cloop_t`
+- `cfor_t`
+- `cwhile_t`
+- `cdo_t`
+- `creturn_t`
+- `cgoto_t`
+- `casm_t`
+- `cinsn_t`
+- `cblock_t`
+- `carg_t`
+- `carglist_t`
+- `ccase_t`
+- `ccases_t`
+- `cswitch_t`
+- `catchexpr_t`
+- `ccatch_t`
+- `ctry_t`
+- `cthrow_t`
+- `cblock_pos_t`
+- `ctree_visitor_t`
+- `ctree_parentee_t`
+- `cfunc_parentee_t`
+- `ctree_anchor_t`
+- `ctree_item_t`
+- `cfunc_t`
+- `ctext_position_t`
+- `history_item_t`
+- `vdui_t`
+- `ui_stroff_op_t`
+- `ui_stroff_applicator_t`
+- `user_numforms_iterator_t`
+- `lvar_mapping_iterator_t`
+- `udcall_map_iterator_t`
+- `user_cmts_iterator_t`
+- `user_iflags_iterator_t`
+- `user_unions_iterator_t`
+- `user_labels_iterator_t`
+- `eamap_iterator_t`
+- `boundaries_iterator_t`
+- `block_chains_iterator_t`
+
+## Functions Overview
+
+- `user_iflags_second(p: user_iflags_iterator_t) -> int32 const &`: Get reference to the current map value.
+- `qswap(a: cinsn_t, b: cinsn_t) -> None`
+- `debug_hexrays_ctree(level: int, msg: str) -> None`
+- `init_hexrays_plugin(flags: int = 0) -> bool`: Check that your plugin is compatible with hex-rays decompiler. This function must be called before calling any other decompiler function.
+- `get_widget_vdui(f: TWidget *) -> vdui_t *`: Get the vdui_t instance associated to the TWidget
+- `boundaries_find(map: boundaries_t, key: cinsn_t) -> boundaries_iterator_t`: Find the specified key in boundaries_t.
+- `boundaries_insert(map: boundaries_t, key: cinsn_t, val: rangeset_t) -> boundaries_iterator_t`: Insert new (cinsn_t *, rangeset_t) pair into boundaries_t.
+- `term_hexrays_plugin() -> None`: Stop working with hex-rays decompiler.
+- `hexrays_alloc(size: size_t) -> void *`
+- `hexrays_free(ptr: void *) -> None`
+- `max_vlr_value(size: int) -> uvlr_t`
+- `min_vlr_svalue(size: int) -> uvlr_t`
+- `max_vlr_svalue(size: int) -> uvlr_t`
+- `is_unsigned_cmpop(cmpop: cmpop_t) -> bool`
+- `is_signed_cmpop(cmpop: cmpop_t) -> bool`
+- `is_cmpop_with_eq(cmpop: cmpop_t) -> bool`
+- `is_cmpop_without_eq(cmpop: cmpop_t) -> bool`
+- `is_may_access(maymust: maymust_t) -> bool`
+- `get_merror_desc(code: merror_t, mba: mba_t) -> str`: Get textual description of an error code
+- `must_mcode_close_block(mcode: mcode_t, including_calls: bool) -> bool`: Must an instruction with the given opcode be the last one in a block? Such opcodes are called closing opcodes.
+- `is_mcode_propagatable(mcode: mcode_t) -> bool`: May opcode be propagated? Such opcodes can be used in sub-instructions (nested instructions) There is a handful of non-propagatable opcodes, like jumps, ret, nop, etc All other regular opcodes are propagatable and may appear in a nested instruction.
+- `is_mcode_addsub(mcode: mcode_t) -> bool`
+- `is_mcode_xdsu(mcode: mcode_t) -> bool`
+- `is_mcode_set(mcode: mcode_t) -> bool`
+- `is_mcode_set1(mcode: mcode_t) -> bool`
+- `is_mcode_j1(mcode: mcode_t) -> bool`
+- `is_mcode_jcond(mcode: mcode_t) -> bool`
+- `is_mcode_convertible_to_jmp(mcode: mcode_t) -> bool`
+- `is_mcode_convertible_to_set(mcode: mcode_t) -> bool`
+- `is_mcode_call(mcode: mcode_t) -> bool`
+- `is_mcode_fpu(mcode: mcode_t) -> bool`
+- `is_mcode_commutative(mcode: mcode_t) -> bool`
+- `is_mcode_shift(mcode: mcode_t) -> bool`
+- `is_mcode_divmod(op: mcode_t) -> bool`
+- `has_mcode_seloff(op: mcode_t) -> bool`
+- `set2jcnd(code: mcode_t) -> mcode_t`
+- `jcnd2set(code: mcode_t) -> mcode_t`
+- `negate_mcode_relation(code: mcode_t) -> mcode_t`
+- `swap_mcode_relation(code: mcode_t) -> mcode_t`
+- `get_signed_mcode(code: mcode_t) -> mcode_t`
+- `get_unsigned_mcode(code: mcode_t) -> mcode_t`
+- `is_signed_mcode(code: mcode_t) -> bool`
+- `is_unsigned_mcode(code: mcode_t) -> bool`
+- `mcode_modifies_d(mcode: mcode_t) -> bool`
+- `dstr(tif: tinfo_t) -> str`: Print the specified type info. This function can be used from a debugger by typing "tif->dstr()"
+- `is_type_correct(ptr: type_t const *) -> bool`: Verify a type string.
+- `is_small_udt(tif: tinfo_t) -> bool`: Is a small structure or union?
+- `is_nonbool_type(type: tinfo_t) -> bool`: Is definitely a non-boolean type?
+- `is_bool_type(type: tinfo_t) -> bool`: Is a boolean type?
+- `is_ptr_or_array(t: type_t) -> bool`: Is a pointer or array type?
+- `is_paf(t: type_t) -> bool`: Is a pointer, array, or function type?
+- `is_inplace_def(type: tinfo_t) -> bool`: Is struct/union/enum definition (not declaration)?
+- `partial_type_num(type: tinfo_t) -> int`: Calculate number of partial subtypes.
+- `get_float_type(width: int) -> tinfo_t`: Get a type of a floating point value with the specified width
+- `get_int_type_by_width_and_sign(srcwidth: int, sign: type_sign_t) -> tinfo_t`: Create a type info by width and sign. Returns a simple type (examples: int, short) with the given width and sign.
+- `get_unk_type(size: int) -> tinfo_t`: Create a partial type info by width. Returns a partially defined type (examples: _DWORD, _BYTE) with the given width.
+- `dummy_ptrtype(ptrsize: int, isfp: bool) -> tinfo_t`: Generate a dummy pointer type
+- `make_pointer(type: tinfo_t) -> tinfo_t`: Create a pointer type. This function performs the following conversion: "type" -> "type*"
+- `create_typedef(*args) -> tinfo_t`: This function has the following signatures:
+- `get_type(id: int, tif: tinfo_t, guess: type_source_t) -> bool`: Get a global type. Global types are types of addressable objects and struct/union/enum types
+- `set_type(id: int, tif: tinfo_t, source: type_source_t, force: bool = False) -> bool`: Set a global type.
+- `print_vdloc(loc: vdloc_t, nbytes: int) -> str`: Print vdloc. Since vdloc does not always carry the size info, we pass it as NBYTES..
+- `arglocs_overlap(loc1: vdloc_t, w1: size_t, loc2: vdloc_t, w2: size_t) -> bool`: Do two arglocs overlap?
+- `restore_user_lvar_settings(lvinf: lvar_uservec_t, func_ea: ida_idaapi.ea_t) -> bool`: Restore user defined local variable settings in the database.
+- `save_user_lvar_settings(func_ea: ida_idaapi.ea_t, lvinf: lvar_uservec_t) -> None`: Save user defined local variable settings into the database.
+- `modify_user_lvars(entry_ea: ida_idaapi.ea_t, mlv: user_lvar_modifier_t) -> bool`: Modify saved local variable settings.
+- `modify_user_lvar_info(func_ea: ida_idaapi.ea_t, mli_flags: uint, info: lvar_saved_info_t) -> bool`: Modify saved local variable settings of one variable.
+- `locate_lvar(out: lvar_locator_t, func_ea: ida_idaapi.ea_t, varname: str) -> bool`: Find a variable by name.
+- `rename_lvar(func_ea: ida_idaapi.ea_t, oldname: str, newname: str) -> bool`: Rename a local variable.
+- `restore_user_defined_calls(udcalls: udcall_map_t *, func_ea: ida_idaapi.ea_t) -> bool`: Restore user defined function calls from the database.
+- `save_user_defined_calls(func_ea: ida_idaapi.ea_t, udcalls: udcall_map_t const &) -> None`: Save user defined local function calls into the database.
+- `parse_user_call(udc: udcall_t, decl: str, silent: bool) -> bool`: Convert function type declaration into internal structure
+- `convert_to_user_call(udc: udcall_t, cdg: codegen_t) -> merror_t`: try to generate user-defined call for an instruction
+- `install_microcode_filter(filter: microcode_filter_t, install: bool = True) -> bool`: register/unregister non-standard microcode generator
+- `get_temp_regs() -> mlist_t const &`: Get list of temporary registers. Tempregs are temporary registers that are used during code generation. They do not map to regular processor registers. They are used only to store temporary values during execution of one instruction. Tempregs may not be used to pass a value from one block to another. In other words, at the end of a block all tempregs must be dead.
+- `is_kreg(r: mreg_t) -> bool`: Is a kernel register? Kernel registers are temporary registers that can be used freely. They may be used to store values that cross instruction or basic block boundaries. Kernel registers do not map to regular processor registers. See also mba_t::alloc_kreg()
+- `reg2mreg(reg: int) -> mreg_t`: Map a processor register to a microregister.
+- `mreg2reg(reg: mreg_t, width: int) -> int`: Map a microregister to a processor register.
+- `get_mreg_name(reg: mreg_t, width: int, ud: void * = None) -> str`: Get the microregister name.
+- `lexcompare(a: mop_t, b: mop_t) -> int`
+- `getf_reginsn(ins: minsn_t) -> minsn_t *`: Skip assertions forward.
+- `getb_reginsn(ins: minsn_t) -> minsn_t *`: Skip assertions backward.
+- `change_hexrays_config(directive: str) -> bool`: Parse DIRECTIVE and update the current configuration variables. For the syntax see hexrays.cfg
+- `get_hexrays_version() -> str`: Get decompiler version. The returned string is of the form <major>.<minor>.<revision>.<build-date>
+- `open_pseudocode(ea: ida_idaapi.ea_t, flags: int) -> vdui_t *`: Open pseudocode window. The specified function is decompiled and the pseudocode window is opened.
+- `close_pseudocode(f: TWidget *) -> bool`: Close pseudocode window.
+- `decompile_many(outfile: str, funcaddrs: uint64vec_t, flags: int) -> bool`: Batch decompilation. Decompile all or the specified functions
+- `send_database(err: hexrays_failure_t, silent: bool) -> None`: Send the database to Hex-Rays. This function sends the current database to the Hex-Rays server. The database is sent in the compressed form over an encrypted (SSL) connection.
+- `get_current_operand(out: gco_info_t) -> bool`: Get the instruction operand under the cursor. This function determines the operand that is under the cursor in the active disassembly listing. If the operand refers to a register or stack variable, it returns true.
+- `remitem(e: citem_t) -> None`
+- `negated_relation(op: ctype_t) -> ctype_t`: Negate a comparison operator. For example, cot_sge becomes cot_slt.
+- `swapped_relation(op: ctype_t) -> ctype_t`: Swap a comparison operator. For example, cot_sge becomes cot_sle.
+- `get_op_signness(op: ctype_t) -> type_sign_t`: Get operator sign. Meaningful for sign-dependent operators, like cot_sdiv.
+- `asgop(cop: ctype_t) -> ctype_t`: Convert plain operator into assignment operator. For example, cot_add returns cot_asgadd.
+- `asgop_revert(cop: ctype_t) -> ctype_t`: Convert assignment operator into plain operator. For example, cot_asgadd returns cot_add
+- `op_uses_x(op: ctype_t) -> bool`: Does operator use the 'x' field of cexpr_t?
+- `op_uses_y(op: ctype_t) -> bool`: Does operator use the 'y' field of cexpr_t?
+- `op_uses_z(op: ctype_t) -> bool`: Does operator use the 'z' field of cexpr_t?
+- `is_binary(op: ctype_t) -> bool`: Is binary operator?
+- `is_unary(op: ctype_t) -> bool`: Is unary operator?
+- `is_relational(op: ctype_t) -> bool`: Is comparison operator?
+- `is_assignment(op: ctype_t) -> bool`: Is assignment operator?
+- `accepts_udts(op: ctype_t) -> bool`
+- `is_prepost(op: ctype_t) -> bool`: Is pre/post increment/decrement operator?
+- `is_commutative(op: ctype_t) -> bool`: Is commutative operator?
+- `is_additive(op: ctype_t) -> bool`: Is additive operator?
+- `is_multiplicative(op: ctype_t) -> bool`: Is multiplicative operator?
+- `is_bitop(op: ctype_t) -> bool`: Is bit related operator?
+- `is_logical(op: ctype_t) -> bool`: Is logical operator?
+- `is_loop(op: ctype_t) -> bool`: Is loop statement code?
+- `is_break_consumer(op: ctype_t) -> bool`: Does a break statement influence the specified statement code?
+- `is_lvalue(op: ctype_t) -> bool`: Is Lvalue operator?
+- `accepts_small_udts(op: ctype_t) -> bool`: Is the operator allowed on small structure or union?
+- `save_user_labels(func_ea: ida_idaapi.ea_t, user_labels: user_labels_t, func: cfunc_t = None) -> None`: Save user defined labels into the database.
+- `save_user_cmts(func_ea: ida_idaapi.ea_t, user_cmts: user_cmts_t) -> None`: Save user defined comments into the database.
+- `save_user_numforms(func_ea: ida_idaapi.ea_t, numforms: user_numforms_t) -> None`: Save user defined number formats into the database.
+- `save_user_iflags(func_ea: ida_idaapi.ea_t, iflags: user_iflags_t) -> None`: Save user defined citem iflags into the database.
+- `save_user_unions(func_ea: ida_idaapi.ea_t, unions: user_unions_t) -> None`: Save user defined union field selections into the database.
+- `restore_user_labels(func_ea: ida_idaapi.ea_t, func: cfunc_t = None) -> user_labels_t *`: Restore user defined labels from the database.
+- `restore_user_cmts(func_ea: ida_idaapi.ea_t) -> user_cmts_t *`: Restore user defined comments from the database.
+- `restore_user_numforms(func_ea: ida_idaapi.ea_t) -> user_numforms_t *`: Restore user defined number formats from the database.
+- `restore_user_iflags(func_ea: ida_idaapi.ea_t) -> user_iflags_t *`: Restore user defined citem iflags from the database.
+- `restore_user_unions(func_ea: ida_idaapi.ea_t) -> user_unions_t *`: Restore user defined union field selections from the database.
+- `close_hexrays_waitbox() -> None`: Close the waitbox displayed by the decompiler. Useful if DECOMP_NO_HIDE was used during decompilation.
+- `decompile(ea, hf=None, flags=0)`: Decompile a snippet or a function.
+- `decompile_func(pfn: func_t *, hf: hexrays_failure_t = None, decomp_flags: int = 0) -> cfuncptr_t`: Decompile a function. Multiple decompilations of the same function return the same object.
+- `gen_microcode(mbr: mba_ranges_t, hf: hexrays_failure_t = None, retlist: mlist_t = None, decomp_flags: int = 0, reqmat: mba_maturity_t = MMAT_GLBOPT3) -> mba_t *`: Generate microcode of an arbitrary code snippet
+- `create_empty_mba(mbr: mba_ranges_t, hf: hexrays_failure_t = None) -> mba_t *`: Create an empty microcode object.
+- `create_cfunc(mba: mba_t) -> cfuncptr_t`: Create a new cfunc_t object.
+- `mark_cfunc_dirty(ea: ida_idaapi.ea_t, close_views: bool = False) -> bool`: Flush the cached decompilation results. Erases a cache entry for the specified function.
+- `clear_cached_cfuncs() -> None`: Flush all cached decompilation results.
+- `has_cached_cfunc(ea: ida_idaapi.ea_t) -> bool`: Do we have a cached decompilation result for 'ea'?
+- `get_ctype_name(op: ctype_t) -> str`
+- `create_field_name(*args) -> str`
+- `select_udt_by_offset(udts: qvector< tinfo_t > const *, ops: ui_stroff_ops_t, applicator: ui_stroff_applicator_t) -> int`: Select UDT
+- `user_numforms_first(p: user_numforms_iterator_t) -> operand_locator_t const &`: Get reference to the current map key.
+- `user_numforms_second(p: user_numforms_iterator_t) -> number_format_t &`: Get reference to the current map value.
+- `user_numforms_find(map: user_numforms_t, key: operand_locator_t) -> user_numforms_iterator_t`: Find the specified key in user_numforms_t.
+- `user_numforms_insert(map: user_numforms_t, key: operand_locator_t, val: number_format_t) -> user_numforms_iterator_t`: Insert new (operand_locator_t, number_format_t) pair into user_numforms_t.
+- `user_numforms_begin(map: user_numforms_t) -> user_numforms_iterator_t`: Get iterator pointing to the beginning of user_numforms_t.
+- `user_numforms_end(map: user_numforms_t) -> user_numforms_iterator_t`: Get iterator pointing to the end of user_numforms_t.
+- `user_numforms_next(p: user_numforms_iterator_t) -> user_numforms_iterator_t`: Move to the next element.
+- `user_numforms_prev(p: user_numforms_iterator_t) -> user_numforms_iterator_t`: Move to the previous element.
+- `user_numforms_erase(map: user_numforms_t, p: user_numforms_iterator_t) -> None`: Erase current element from user_numforms_t.
+- `user_numforms_clear(map: user_numforms_t) -> None`: Clear user_numforms_t.
+- `user_numforms_size(map: user_numforms_t) -> size_t`: Get size of user_numforms_t.
+- `user_numforms_free(map: user_numforms_t) -> None`: Delete user_numforms_t instance.
+- `user_numforms_new() -> user_numforms_t *`: Create a new user_numforms_t instance.
+- `lvar_mapping_first(p: lvar_mapping_iterator_t) -> lvar_locator_t const &`: Get reference to the current map key.
+- `lvar_mapping_second(p: lvar_mapping_iterator_t) -> lvar_locator_t &`: Get reference to the current map value.
+- `lvar_mapping_find(map: lvar_mapping_t, key: lvar_locator_t) -> lvar_mapping_iterator_t`: Find the specified key in lvar_mapping_t.
+- `lvar_mapping_insert(map: lvar_mapping_t, key: lvar_locator_t, val: lvar_locator_t) -> lvar_mapping_iterator_t`: Insert new (lvar_locator_t, lvar_locator_t) pair into lvar_mapping_t.
+- `lvar_mapping_begin(map: lvar_mapping_t) -> lvar_mapping_iterator_t`: Get iterator pointing to the beginning of lvar_mapping_t.
+- `lvar_mapping_end(map: lvar_mapping_t) -> lvar_mapping_iterator_t`: Get iterator pointing to the end of lvar_mapping_t.
+- `lvar_mapping_next(p: lvar_mapping_iterator_t) -> lvar_mapping_iterator_t`: Move to the next element.
+- `lvar_mapping_prev(p: lvar_mapping_iterator_t) -> lvar_mapping_iterator_t`: Move to the previous element.
+- `lvar_mapping_erase(map: lvar_mapping_t, p: lvar_mapping_iterator_t) -> None`: Erase current element from lvar_mapping_t.
+- `lvar_mapping_clear(map: lvar_mapping_t) -> None`: Clear lvar_mapping_t.
+- `lvar_mapping_size(map: lvar_mapping_t) -> size_t`: Get size of lvar_mapping_t.
+- `lvar_mapping_free(map: lvar_mapping_t) -> None`: Delete lvar_mapping_t instance.
+- `lvar_mapping_new() -> lvar_mapping_t *`: Create a new lvar_mapping_t instance.
+- `udcall_map_first(p: udcall_map_iterator_t) -> ea_t const &`: Get reference to the current map key.
+- `udcall_map_second(p: udcall_map_iterator_t) -> udcall_t &`: Get reference to the current map value.
+- `udcall_map_find(map: udcall_map_t const *, key: ea_t const &) -> udcall_map_iterator_t`: Find the specified key in udcall_map_t.
+- `udcall_map_insert(map: udcall_map_t *, key: ea_t const &, val: udcall_t) -> udcall_map_iterator_t`: Insert new (ea_t, udcall_t) pair into udcall_map_t.
+- `udcall_map_begin(map: udcall_map_t const *) -> udcall_map_iterator_t`: Get iterator pointing to the beginning of udcall_map_t.
+- `udcall_map_end(map: udcall_map_t const *) -> udcall_map_iterator_t`: Get iterator pointing to the end of udcall_map_t.
+- `udcall_map_next(p: udcall_map_iterator_t) -> udcall_map_iterator_t`: Move to the next element.
+- `udcall_map_prev(p: udcall_map_iterator_t) -> udcall_map_iterator_t`: Move to the previous element.
+- `udcall_map_erase(map: udcall_map_t *, p: udcall_map_iterator_t) -> None`: Erase current element from udcall_map_t.
+- `udcall_map_clear(map: udcall_map_t *) -> None`: Clear udcall_map_t.
+- `udcall_map_size(map: udcall_map_t *) -> size_t`: Get size of udcall_map_t.
+- `udcall_map_free(map: udcall_map_t *) -> None`: Delete udcall_map_t instance.
+- `udcall_map_new() -> udcall_map_t *`: Create a new udcall_map_t instance.
+- `user_cmts_first(p: user_cmts_iterator_t) -> treeloc_t const &`: Get reference to the current map key.
+- `user_cmts_second(p: user_cmts_iterator_t) -> citem_cmt_t &`: Get reference to the current map value.
+- `user_cmts_find(map: user_cmts_t, key: treeloc_t) -> user_cmts_iterator_t`: Find the specified key in user_cmts_t.
+- `user_cmts_insert(map: user_cmts_t, key: treeloc_t, val: citem_cmt_t) -> user_cmts_iterator_t`: Insert new (treeloc_t, citem_cmt_t) pair into user_cmts_t.
+- `user_cmts_begin(map: user_cmts_t) -> user_cmts_iterator_t`: Get iterator pointing to the beginning of user_cmts_t.
+- `user_cmts_end(map: user_cmts_t) -> user_cmts_iterator_t`: Get iterator pointing to the end of user_cmts_t.
+- `user_cmts_next(p: user_cmts_iterator_t) -> user_cmts_iterator_t`: Move to the next element.
+- `user_cmts_prev(p: user_cmts_iterator_t) -> user_cmts_iterator_t`: Move to the previous element.
+- `user_cmts_erase(map: user_cmts_t, p: user_cmts_iterator_t) -> None`: Erase current element from user_cmts_t.
+- `user_cmts_clear(map: user_cmts_t) -> None`: Clear user_cmts_t.
+- `user_cmts_size(map: user_cmts_t) -> size_t`: Get size of user_cmts_t.
+- `user_cmts_free(map: user_cmts_t) -> None`: Delete user_cmts_t instance.
+- `user_cmts_new() -> user_cmts_t *`: Create a new user_cmts_t instance.
+- `user_iflags_first(p: user_iflags_iterator_t) -> citem_locator_t const &`: Get reference to the current map key.
+- `user_iflags_find(map: user_iflags_t, key: citem_locator_t) -> user_iflags_iterator_t`: Find the specified key in user_iflags_t.
+- `user_iflags_insert(map: user_iflags_t, key: citem_locator_t, val: int32 const &) -> user_iflags_iterator_t`: Insert new (citem_locator_t, int32) pair into user_iflags_t.
+- `user_iflags_begin(map: user_iflags_t) -> user_iflags_iterator_t`: Get iterator pointing to the beginning of user_iflags_t.
+- `user_iflags_end(map: user_iflags_t) -> user_iflags_iterator_t`: Get iterator pointing to the end of user_iflags_t.
+- `user_iflags_next(p: user_iflags_iterator_t) -> user_iflags_iterator_t`: Move to the next element.
+- `user_iflags_prev(p: user_iflags_iterator_t) -> user_iflags_iterator_t`: Move to the previous element.
+- `user_iflags_erase(map: user_iflags_t, p: user_iflags_iterator_t) -> None`: Erase current element from user_iflags_t.
+- `user_iflags_clear(map: user_iflags_t) -> None`: Clear user_iflags_t.
+- `user_iflags_size(map: user_iflags_t) -> size_t`: Get size of user_iflags_t.
+- `user_iflags_free(map: user_iflags_t) -> None`: Delete user_iflags_t instance.
+- `user_iflags_new() -> user_iflags_t *`: Create a new user_iflags_t instance.
+- `user_unions_first(p: user_unions_iterator_t) -> ea_t const &`: Get reference to the current map key.
+- `user_unions_second(p: user_unions_iterator_t) -> intvec_t &`: Get reference to the current map value.
+- `user_unions_find(map: user_unions_t, key: ea_t const &) -> user_unions_iterator_t`: Find the specified key in user_unions_t.
+- `user_unions_insert(map: user_unions_t, key: ea_t const &, val: intvec_t) -> user_unions_iterator_t`: Insert new (ea_t, intvec_t) pair into user_unions_t.
+- `user_unions_begin(map: user_unions_t) -> user_unions_iterator_t`: Get iterator pointing to the beginning of user_unions_t.
+- `user_unions_end(map: user_unions_t) -> user_unions_iterator_t`: Get iterator pointing to the end of user_unions_t.
+- `user_unions_next(p: user_unions_iterator_t) -> user_unions_iterator_t`: Move to the next element.
+- `user_unions_prev(p: user_unions_iterator_t) -> user_unions_iterator_t`: Move to the previous element.
+- `user_unions_erase(map: user_unions_t, p: user_unions_iterator_t) -> None`: Erase current element from user_unions_t.
+- `user_unions_clear(map: user_unions_t) -> None`: Clear user_unions_t.
+- `user_unions_size(map: user_unions_t) -> size_t`: Get size of user_unions_t.
+- `user_unions_free(map: user_unions_t) -> None`: Delete user_unions_t instance.
+- `user_unions_new() -> user_unions_t *`: Create a new user_unions_t instance.
+- `user_labels_first(p: user_labels_iterator_t) -> int const &`: Get reference to the current map key.
+- `user_labels_second(p: user_labels_iterator_t) -> str`: Get reference to the current map value.
+- `user_labels_find(map: user_labels_t, key: int const &) -> user_labels_iterator_t`: Find the specified key in user_labels_t.
+- `user_labels_insert(map: user_labels_t, key: int const &, val: str) -> user_labels_iterator_t`: Insert new (int, qstring) pair into user_labels_t.
+- `user_labels_begin(map: user_labels_t) -> user_labels_iterator_t`: Get iterator pointing to the beginning of user_labels_t.
+- `user_labels_end(map: user_labels_t) -> user_labels_iterator_t`: Get iterator pointing to the end of user_labels_t.
+- `user_labels_next(p: user_labels_iterator_t) -> user_labels_iterator_t`: Move to the next element.
+- `user_labels_prev(p: user_labels_iterator_t) -> user_labels_iterator_t`: Move to the previous element.
+- `user_labels_erase(map: user_labels_t, p: user_labels_iterator_t) -> None`: Erase current element from user_labels_t.
+- `user_labels_clear(map: user_labels_t) -> None`: Clear user_labels_t.
+- `user_labels_size(map: user_labels_t) -> size_t`: Get size of user_labels_t.
+- `user_labels_free(map: user_labels_t) -> None`: Delete user_labels_t instance.
+- `user_labels_new() -> user_labels_t *`: Create a new user_labels_t instance.
+- `eamap_first(p: eamap_iterator_t) -> ea_t const &`: Get reference to the current map key.
+- `eamap_second(p: eamap_iterator_t) -> cinsnptrvec_t &`: Get reference to the current map value.
+- `eamap_find(map: eamap_t, key: ea_t const &) -> eamap_iterator_t`: Find the specified key in eamap_t.
+- `eamap_insert(map: eamap_t, key: ea_t const &, val: cinsnptrvec_t) -> eamap_iterator_t`: Insert new (ea_t, cinsnptrvec_t) pair into eamap_t.
+- `eamap_begin(map: eamap_t) -> eamap_iterator_t`: Get iterator pointing to the beginning of eamap_t.
+- `eamap_end(map: eamap_t) -> eamap_iterator_t`: Get iterator pointing to the end of eamap_t.
+- `eamap_next(p: eamap_iterator_t) -> eamap_iterator_t`: Move to the next element.
+- `eamap_prev(p: eamap_iterator_t) -> eamap_iterator_t`: Move to the previous element.
+- `eamap_erase(map: eamap_t, p: eamap_iterator_t) -> None`: Erase current element from eamap_t.
+- `eamap_clear(map: eamap_t) -> None`: Clear eamap_t.
+- `eamap_size(map: eamap_t) -> size_t`: Get size of eamap_t.
+- `eamap_free(map: eamap_t) -> None`: Delete eamap_t instance.
+- `eamap_new() -> eamap_t *`: Create a new eamap_t instance.
+- `boundaries_first(p: boundaries_iterator_t) -> cinsn_t *const &`: Get reference to the current map key.
+- `boundaries_second(p: boundaries_iterator_t) -> rangeset_t &`: Get reference to the current map value.
+- `boundaries_begin(map: boundaries_t) -> boundaries_iterator_t`: Get iterator pointing to the beginning of boundaries_t.
+- `boundaries_end(map: boundaries_t) -> boundaries_iterator_t`: Get iterator pointing to the end of boundaries_t.
+- `boundaries_next(p: boundaries_iterator_t) -> boundaries_iterator_t`: Move to the next element.
+- `boundaries_prev(p: boundaries_iterator_t) -> boundaries_iterator_t`: Move to the previous element.
+- `boundaries_erase(map: boundaries_t, p: boundaries_iterator_t) -> None`: Erase current element from boundaries_t.
+- `boundaries_clear(map: boundaries_t) -> None`: Clear boundaries_t.
+- `boundaries_size(map: boundaries_t) -> size_t`: Get size of boundaries_t.
+- `boundaries_free(map: boundaries_t) -> None`: Delete boundaries_t instance.
+- `boundaries_new() -> boundaries_t *`: Create a new boundaries_t instance.
+- `block_chains_get(p: block_chains_iterator_t) -> chain_t &`: Get reference to the current set value.
+- `block_chains_find(set: block_chains_t, val: chain_t) -> block_chains_iterator_t`: Find the specified key in set block_chains_t.
+- `block_chains_insert(set: block_chains_t, val: chain_t) -> block_chains_iterator_t`: Insert new (chain_t) into set block_chains_t.
+- `block_chains_begin(set: block_chains_t) -> block_chains_iterator_t`: Get iterator pointing to the beginning of block_chains_t.
+- `block_chains_end(set: block_chains_t) -> block_chains_iterator_t`: Get iterator pointing to the end of block_chains_t.
+- `block_chains_next(p: block_chains_iterator_t) -> block_chains_iterator_t`: Move to the next element.
+- `block_chains_prev(p: block_chains_iterator_t) -> block_chains_iterator_t`: Move to the previous element.
+- `block_chains_erase(set: block_chains_t, p: block_chains_iterator_t) -> None`: Erase current element from block_chains_t.
+- `block_chains_clear(set: block_chains_t) -> None`: Clear block_chains_t.
+- `block_chains_size(set: block_chains_t) -> size_t`: Get size of block_chains_t.
+- `block_chains_free(set: block_chains_t) -> None`: Delete block_chains_t instance.
+- `block_chains_new() -> block_chains_t *`: Create a new block_chains_t instance.
+- `decompile(ea, hf=None, flags=0)`: Decompile a snippet or a function.
+- `citem_to_specific_type(self)`: cast the citem_t object to its more specific type, either cexpr_t or cinsn_t.
+- `property_op_to_typename(self)`
+- `cexpr_operands(self)`: return a dictionary with the operands of a cexpr_t.
+- `cinsn_details(self)`: return the details pointer for the cinsn_t object depending on the value of its op member.     this is one of the cblock_t, cif_t, etc. objects.
+- `cfunc_type(self)`: Get the function's return type tinfo_t object.
+- `lnot(e)`: Logically negate the specified expression. The specified expression will be logically negated. For example, "x == y" is converted into "x != y" by this function.
+- `make_ref(e)`: Create a reference. This function performs the following conversion: "obj" => "&obj". It can handle casts, annihilate "&*", and process other special cases.
+- `dereference(e, ptrsize, is_float=False)`: Dereference a pointer. This function dereferences a pointer expression. It performs the following conversion: "ptr" => "*ptr" It can handle discrepancies in the pointer type and the access size.
+- `call_helper(rettype, args, *rest)`: Create a helper call.
+- `new_block()`: Create a new block-statement.
+- `make_num(*args)`: Create a number expression
+- `create_helper(*args)`: Create a helper object..
+- `install_hexrays_callback(callback)`: Install handler for decompiler events.
+- `remove_hexrays_callback(callback)`: Uninstall handler for decompiler events.

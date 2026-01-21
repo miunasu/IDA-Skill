@@ -1,0 +1,1174 @@
+# idc
+
+IDC compatibility module
+
+This file contains IDA built-in function declarations and internal bit
+definitions.  Each byte of the program has 32-bit flags (low 8 bits keep
+the byte value). These 32 bits are used in get_full_flags/get_flags functions.
+
+This file is subject to change without any notice.
+Future versions of IDA may use other definitions.
+
+## Constants
+
+- `WORDMASK`
+- `BADADDR`
+- `BADSEL`
+- `SIZE_MAX`
+- `MS_VAL`
+- `FF_IVL`
+- `MS_CLS`
+- `FF_CODE`
+- `FF_DATA`
+- `FF_TAIL`
+- `FF_UNK`
+- `MS_COMM`
+- `FF_COMM`
+- `FF_REF`
+- `FF_LINE`
+- `FF_NAME`
+- `FF_LABL`
+- `FF_FLOW`
+- `FF_ANYNAME`
+- `MS_0TYPE`
+- `FF_0VOID`
+- `FF_0NUMH`
+- `FF_0NUMD`
+- `FF_0CHAR`
+- `FF_0SEG`
+- `FF_0OFF`
+- `FF_0NUMB`
+- `FF_0NUMO`
+- `FF_0ENUM`
+- `FF_0FOP`
+- `FF_0STRO`
+- `FF_0STK`
+- `MS_1TYPE`
+- `FF_1VOID`
+- `FF_1NUMH`
+- `FF_1NUMD`
+- `FF_1CHAR`
+- `FF_1SEG`
+- `FF_1OFF`
+- `FF_1NUMB`
+- `FF_1NUMO`
+- `FF_1ENUM`
+- `FF_1FOP`
+- `FF_1STRO`
+- `FF_1STK`
+- `DT_TYPE`
+- `FF_BYTE`
+- `FF_WORD`
+- `FF_DWORD`
+- `FF_QWORD`
+- `FF_TBYTE`
+- `FF_STRLIT`
+- `FF_STRUCT`
+- `FF_OWORD`
+- `FF_FLOAT`
+- `FF_DOUBLE`
+- `FF_PACKREAL`
+- `FF_ALIGN`
+- `MS_CODE`
+- `FF_FUNC`
+- `FF_IMMD`
+- `FF_JUMP`
+- `NEF_SEGS`
+- `NEF_RSCS`
+- `NEF_NAME`
+- `NEF_MAN`
+- `NEF_FILL`
+- `NEF_IMPS`
+- `NEF_FIRST`
+- `NEF_CODE`
+- `NEF_RELOAD`
+- `NEF_FLAT`
+- `IDCHK_OK`
+- `IDCHK_ARG`
+- `IDCHK_KEY`
+- `IDCHK_MAX`
+- `add_idc_hotkey`
+- `del_idc_hotkey`
+- `jumpto`
+- `auto_wait`
+- `DBFL_BAK`
+- `qexit`
+- `load_and_run_plugin`
+- `plan_to_apply_idasgn`
+- `create_insn`
+- `SN_CHECK`
+- `SN_NOCHECK`
+- `SN_PUBLIC`
+- `SN_NON_PUBLIC`
+- `SN_WEAK`
+- `SN_NON_WEAK`
+- `SN_AUTO`
+- `SN_NON_AUTO`
+- `SN_NOLIST`
+- `SN_NOWARN`
+- `SN_LOCAL`
+- `set_cmt`
+- `create_data`
+- `create_custom_data`
+- `create_align`
+- `del_items`
+- `DELIT_SIMPLE`
+- `DELIT_EXPAND`
+- `DELIT_DELNAMES`
+- `AP_ALLOWDUPS`
+- `AP_SIGNED`
+- `AP_INDEX`
+- `AP_ARRAY`
+- `AP_IDXBASEMASK`
+- `AP_IDXDEC`
+- `AP_IDXHEX`
+- `AP_IDXOCT`
+- `AP_IDXBIN`
+- `op_bin`
+- `op_oct`
+- `op_dec`
+- `op_hex`
+- `op_chr`
+- `OPND_OUTER`
+- `op_offset`
+- `REF_OFF8`
+- `REF_OFF16`
+- `REF_OFF32`
+- `REF_LOW8`
+- `REF_LOW16`
+- `REF_HIGH8`
+- `REF_HIGH16`
+- `REF_OFF64`
+- `REFINFO_RVA`
+- `REFINFO_PASTEND`
+- `REFINFO_NOBASE`
+- `REFINFO_SUBTRACT`
+- `REFINFO_SIGNEDOP`
+- `op_seg`
+- `op_num`
+- `op_flt`
+- `op_man`
+- `toggle_sign`
+- `op_enum`
+- `op_stkvar`
+- `E_PREV`
+- `E_NEXT`
+- `get_extra_cmt`
+- `update_extra_cmt`
+- `del_extra_cmt`
+- `set_manual_insn`
+- `get_manual_insn`
+- `patch_dbg_byte`
+- `patch_byte`
+- `patch_word`
+- `patch_dword`
+- `patch_qword`
+- `SR_inherit`
+- `SR_user`
+- `SR_auto`
+- `SR_autostart`
+- `auto_mark_range`
+- `auto_unmark`
+- `AU_UNK`
+- `AU_CODE`
+- `AU_PROC`
+- `AU_USED`
+- `AU_LIBF`
+- `AU_FINAL`
+- `OFILE_MAP`
+- `OFILE_EXE`
+- `OFILE_IDC`
+- `OFILE_LST`
+- `OFILE_ASM`
+- `OFILE_DIF`
+- `GENFLG_MAPSEG`
+- `GENFLG_MAPNAME`
+- `GENFLG_MAPDMNG`
+- `GENFLG_MAPLOC`
+- `GENFLG_IDCTYPE`
+- `GENFLG_ASMTYPE`
+- `GENFLG_GENHTML`
+- `GENFLG_ASMINC`
+- `CHART_PRINT_NAMES`
+- `CHART_GEN_GDL`
+- `CHART_WINGRAPH`
+- `CHART_NOLIBFUNCS`
+- `get_root_filename`
+- `get_input_file_path`
+- `set_root_filename`
+- `retrieve_input_file_md5`
+- `get_full_flags`
+- `get_db_byte`
+- `get_wide_byte`
+- `read_dbg_memory`
+- `get_original_byte`
+- `get_wide_word`
+- `get_wide_dword`
+- `get_qword`
+- `get_name_ea`
+- `get_screen_ea`
+- `next_addr`
+- `prev_addr`
+- `next_not_tail`
+- `prev_not_tail`
+- `get_item_head`
+- `get_item_end`
+- `GN_VISIBLE`
+- `GN_COLORED`
+- `GN_DEMANGLED`
+- `GN_STRICT`
+- `GN_SHORT`
+- `GN_LONG`
+- `GN_LOCAL`
+- `GN_ISRET`
+- `GN_NOT_ISRET`
+- `calc_gtn_flags`
+- `GENDSM_FORCE_CODE`
+- `GENDSM_MULTI_LINE`
+- `o_void`
+- `o_reg`
+- `o_mem`
+- `o_phrase`
+- `o_displ`
+- `o_imm`
+- `o_far`
+- `o_near`
+- `o_idpspec0`
+- `o_idpspec1`
+- `o_idpspec2`
+- `o_idpspec3`
+- `o_idpspec4`
+- `o_idpspec5`
+- `o_trreg`
+- `o_dbreg`
+- `o_crreg`
+- `o_fpreg`
+- `o_mmxreg`
+- `o_xmmreg`
+- `o_reglist`
+- `o_creglist`
+- `o_creg`
+- `o_fpreglist`
+- `o_text`
+- `o_cond`
+- `o_spr`
+- `o_twofpr`
+- `o_shmbme`
+- `o_crf`
+- `o_crb`
+- `o_dcr`
+- `GetCommentEx`
+- `get_cmt`
+- `get_forced_operand`
+- `BPU_1B`
+- `BPU_2B`
+- `BPU_4B`
+- `STRWIDTH_1B`
+- `STRWIDTH_2B`
+- `STRWIDTH_4B`
+- `STRWIDTH_MASK`
+- `STRLYT_TERMCHR`
+- `STRLYT_PASCAL1`
+- `STRLYT_PASCAL2`
+- `STRLYT_PASCAL4`
+- `STRLYT_MASK`
+- `STRLYT_SHIFT`
+- `STRTYPE_TERMCHR`
+- `STRTYPE_C`
+- `STRTYPE_C_16`
+- `STRTYPE_C_32`
+- `STRTYPE_PASCAL`
+- `STRTYPE_PASCAL_16`
+- `STRTYPE_LEN2`
+- `STRTYPE_LEN2_16`
+- `STRTYPE_LEN4`
+- `STRTYPE_LEN4_16`
+- `STRTYPE_C16`
+- `find_suspop`
+- `find_code`
+- `find_data`
+- `find_unknown`
+- `find_defined`
+- `find_imm`
+- `find_text`
+- `find_bytes`
+- `INF_VERSION`
+- `INF_PROCNAME`
+- `INF_GENFLAGS`
+- `INF_LFLAGS`
+- `INF_DATABASE_CHANGE_COUNT`
+- `INF_CHANGE_COUNTER`
+- `INF_FILETYPE`
+- `FT_EXE_OLD`
+- `FT_COM_OLD`
+- `FT_BIN`
+- `FT_DRV`
+- `FT_WIN`
+- `FT_HEX`
+- `FT_MEX`
+- `FT_LX`
+- `FT_LE`
+- `FT_NLM`
+- `FT_COFF`
+- `FT_PE`
+- `FT_OMF`
+- `FT_SREC`
+- `FT_ZIP`
+- `FT_OMFLIB`
+- `FT_AR`
+- `FT_LOADER`
+- `FT_ELF`
+- `FT_W32RUN`
+- `FT_AOUT`
+- `FT_PRC`
+- `FT_EXE`
+- `FT_COM`
+- `FT_AIXAR`
+- `FT_MACHO`
+- `INF_OSTYPE`
+- `OSTYPE_MSDOS`
+- `OSTYPE_WIN`
+- `OSTYPE_OS2`
+- `OSTYPE_NETW`
+- `INF_APPTYPE`
+- `APPT_CONSOLE`
+- `APPT_GRAPHIC`
+- `APPT_PROGRAM`
+- `APPT_LIBRARY`
+- `APPT_DRIVER`
+- `APPT_1THREAD`
+- `APPT_MTHREAD`
+- `APPT_16BIT`
+- `APPT_32BIT`
+- `INF_ASMTYPE`
+- `INF_SPECSEGS`
+- `INF_AF`
+- `INF_AF2`
+- `INF_BASEADDR`
+- `INF_START_SS`
+- `INF_START_CS`
+- `INF_START_IP`
+- `INF_START_EA`
+- `INF_START_SP`
+- `INF_MAIN`
+- `INF_MIN_EA`
+- `INF_MAX_EA`
+- `INF_OMIN_EA`
+- `INF_OMAX_EA`
+- `INF_LOWOFF`
+- `INF_LOW_OFF`
+- `INF_HIGHOFF`
+- `INF_HIGH_OFF`
+- `INF_MAXREF`
+- `INF_PRIVRANGE_START_EA`
+- `INF_START_PRIVRANGE`
+- `INF_PRIVRANGE_END_EA`
+- `INF_END_PRIVRANGE`
+- `INF_NETDELTA`
+- `INF_XREFNUM`
+- `INF_TYPE_XREFNUM`
+- `INF_TYPE_XREFS`
+- `INF_REFCMTNUM`
+- `INF_REFCMTS`
+- `INF_XREFFLAG`
+- `INF_XREFS`
+- `INF_MAX_AUTONAME_LEN`
+- `INF_NAMETYPE`
+- `INF_SHORT_DEMNAMES`
+- `INF_SHORT_DN`
+- `INF_LONG_DEMNAMES`
+- `INF_LONG_DN`
+- `INF_DEMNAMES`
+- `INF_LISTNAMES`
+- `INF_INDENT`
+- `INF_CMT_INDENT`
+- `INF_COMMENT`
+- `INF_MARGIN`
+- `INF_LENXREF`
+- `INF_OUTFLAGS`
+- `INF_CMTFLG`
+- `INF_CMTFLAG`
+- `INF_LIMITER`
+- `INF_BORDER`
+- `INF_BIN_PREFIX_SIZE`
+- `INF_BINPREF`
+- `INF_PREFFLAG`
+- `INF_STRLIT_FLAGS`
+- `INF_STRLIT_BREAK`
+- `INF_STRLIT_ZEROES`
+- `INF_STRTYPE`
+- `INF_STRLIT_PREF`
+- `INF_STRLIT_SERNUM`
+- `INF_DATATYPES`
+- `INF_CC_ID`
+- `COMP_MASK`
+- `COMP_UNK`
+- `COMP_MS`
+- `COMP_BC`
+- `COMP_WATCOM`
+- `COMP_GNU`
+- `COMP_VISAGE`
+- `COMP_BP`
+- `INF_CC_CM`
+- `INF_CC_SIZE_I`
+- `INF_CC_SIZE_B`
+- `INF_CC_SIZE_E`
+- `INF_CC_DEFALIGN`
+- `INF_CC_SIZE_S`
+- `INF_CC_SIZE_L`
+- `INF_CC_SIZE_LL`
+- `INF_CC_SIZE_LDBL`
+- `INF_COMPILER`
+- `INF_MODEL`
+- `INF_SIZEOF_INT`
+- `INF_SIZEOF_BOOL`
+- `INF_SIZEOF_ENUM`
+- `INF_SIZEOF_ALGN`
+- `INF_SIZEOF_SHORT`
+- `INF_SIZEOF_LONG`
+- `INF_SIZEOF_LLONG`
+- `INF_SIZEOF_LDBL`
+- `INF_ABIBITS`
+- `INF_APPCALL_OPTIONS`
+- `set_processor_type`
+- `SETPROC_IDB`
+- `SETPROC_LOADER`
+- `SETPROC_LOADER_NON_FATAL`
+- `SETPROC_USER`
+- `set_target_assembler`
+- `ask_seg`
+- `ask_yn`
+- `msg`
+- `warning`
+- `error`
+- `set_ida_state`
+- `IDA_STATUS_READY`
+- `IDA_STATUS_THINKING`
+- `IDA_STATUS_WAITING`
+- `IDA_STATUS_WORK`
+- `refresh_idaview_anyway`
+- `refresh_lists`
+- `set_selector`
+- `del_selector`
+- `ADDSEG_NOSREG`
+- `ADDSEG_OR_DIE`
+- `ADDSEG_NOTRUNC`
+- `ADDSEG_QUIET`
+- `ADDSEG_FILLGAP`
+- `ADDSEG_SPARSE`
+- `del_segm`
+- `SEGMOD_KILL`
+- `SEGMOD_KEEP`
+- `SEGMOD_SILENT`
+- `saAbs`
+- `saRelByte`
+- `saRelWord`
+- `saRelPara`
+- `saRelPage`
+- `saRelDble`
+- `saRel4K`
+- `saGroup`
+- `saRel32Bytes`
+- `saRel64Bytes`
+- `saRelQword`
+- `scPriv`
+- `scPub`
+- `scPub2`
+- `scStack`
+- `scCommon`
+- `scPub3`
+- `SEG_NORM`
+- `SEG_XTRN`
+- `SEG_CODE`
+- `SEG_DATA`
+- `SEG_IMP`
+- `SEG_GRP`
+- `SEG_NULL`
+- `SEG_UNDF`
+- `SEG_BSS`
+- `SEG_ABSSYM`
+- `SEG_COMM`
+- `SEG_IMEM`
+- `SEGATTR_START`
+- `SEGATTR_END`
+- `SEGATTR_ORGBASE`
+- `SEGATTR_ALIGN`
+- `SEGATTR_COMB`
+- `SEGATTR_PERM`
+- `SEGATTR_BITNESS`
+- `SEGATTR_FLAGS`
+- `SEGATTR_SEL`
+- `SEGATTR_ES`
+- `SEGATTR_CS`
+- `SEGATTR_SS`
+- `SEGATTR_DS`
+- `SEGATTR_FS`
+- `SEGATTR_GS`
+- `SEGATTR_TYPE`
+- `SEGATTR_COLOR`
+- `SEGATTR_START`
+- `SFL_COMORG`
+- `SFL_OBOK`
+- `SFL_HIDDEN`
+- `SFL_DEBUG`
+- `SFL_LOADER`
+- `SFL_HIDETYPE`
+- `MSF_SILENT`
+- `MSF_NOFIX`
+- `MSF_LDKEEP`
+- `MSF_FIXONCE`
+- `MOVE_SEGM_OK`
+- `MOVE_SEGM_PARAM`
+- `MOVE_SEGM_ROOM`
+- `MOVE_SEGM_IDP`
+- `MOVE_SEGM_CHUNK`
+- `MOVE_SEGM_LOADER`
+- `MOVE_SEGM_ODD`
+- `MOVE_SEGM_ORPHAN`
+- `MOVE_SEGM_DEBUG`
+- `MOVE_SEGM_SOURCEFILES`
+- `MOVE_SEGM_MAPPING`
+- `MOVE_SEGM_INVAL`
+- `rebase_program`
+- `set_storage_type`
+- `STT_VA`
+- `STT_MM`
+- `fl_CF`
+- `fl_CN`
+- `fl_JF`
+- `fl_JN`
+- `fl_F`
+- `XREF_USER`
+- `add_cref`
+- `del_cref`
+- `get_first_cref_from`
+- `get_next_cref_from`
+- `get_first_cref_to`
+- `get_next_cref_to`
+- `get_first_fcref_from`
+- `get_next_fcref_from`
+- `get_first_fcref_to`
+- `get_next_fcref_to`
+- `dr_O`
+- `dr_W`
+- `dr_R`
+- `dr_T`
+- `dr_I`
+- `add_dref`
+- `del_dref`
+- `get_first_dref_from`
+- `get_next_dref_from`
+- `get_first_dref_to`
+- `get_next_dref_to`
+- `add_func`
+- `del_func`
+- `set_func_end`
+- `FUNCATTR_START`
+- `FUNCATTR_END`
+- `FUNCATTR_FLAGS`
+- `FUNCATTR_FRAME`
+- `FUNCATTR_FRSIZE`
+- `FUNCATTR_FRREGS`
+- `FUNCATTR_ARGSIZE`
+- `FUNCATTR_FPD`
+- `FUNCATTR_COLOR`
+- `FUNCATTR_OWNER`
+- `FUNCATTR_REFQTY`
+- `FUNCATTR_START`
+- `FUNC_NORET`
+- `FUNC_FAR`
+- `FUNC_LIB`
+- `FUNC_STATIC`
+- `FUNC_FRAME`
+- `FUNC_USERFAR`
+- `FUNC_HIDDEN`
+- `FUNC_THUNK`
+- `FUNC_BOTTOMBP`
+- `FUNC_NORET_PENDING`
+- `FUNC_SP_READY`
+- `FUNC_PURGED_OK`
+- `FUNC_TAIL`
+- `FUNC_LUMINA`
+- `FUNC_OUTLINE`
+- `get_fchunk_referer`
+- `add_user_stkpnt`
+- `recalc_spd`
+- `get_entry_qty`
+- `add_entry`
+- `get_entry_ordinal`
+- `get_entry`
+- `get_entry_name`
+- `rename_entry`
+- `get_next_fixup_ea`
+- `get_prev_fixup_ea`
+- `FIXUP_OFF8`
+- `FIXUP_OFF16`
+- `FIXUP_SEG16`
+- `FIXUP_PTR32`
+- `FIXUP_OFF32`
+- `FIXUP_PTR48`
+- `FIXUP_HI8`
+- `FIXUP_HI16`
+- `FIXUP_LOW8`
+- `FIXUP_LOW16`
+- `FIXUP_OFF64`
+- `FIXUP_CUSTOM`
+- `FIXUPF_REL`
+- `FIXUPF_EXTDEF`
+- `FIXUPF_UNUSED`
+- `FIXUPF_CREATED`
+- `del_fixup`
+- `put_bookmark`
+- `get_bookmark`
+- `get_bookmark_desc`
+- `ENFL_REGEX`
+- `AR_LONG`: Array of longs
+- `AR_STR`: Array of strings
+- `add_sourcefile`
+- `get_sourcefile`
+- `del_sourcefile`
+- `set_source_linnum`
+- `get_source_linnum`
+- `del_source_linnum`
+- `SizeOf`
+- `TINFO_GUESSED`
+- `TINFO_DEFINITE`
+- `TINFO_DELAYFUNC`
+- `PT_SIL`
+- `PT_NDC`
+- `PT_TYP`
+- `PT_VAR`
+- `PT_PACKMASK`
+- `PT_HIGH`
+- `PT_LOWER`
+- `PT_REPLACE`
+- `PT_RAWARGS`
+- `PT_SILENT`
+- `PT_PAKDEF`
+- `PT_PAK1`
+- `PT_PAK2`
+- `PT_PAK4`
+- `PT_PAK8`
+- `PT_PAK16`
+- `PT_FILE`
+- `PT_STANDALONE`
+- `PDF_INCL_DEPS`
+- `PDF_DEF_FWD`
+- `PDF_DEF_BASE`
+- `PDF_HEADER_CMT`
+- `PRTYPE_1LINE`
+- `PRTYPE_MULTI`
+- `PRTYPE_TYPE`
+- `PRTYPE_PRAGMA`
+- `PRTYPE_SEMI`
+- `PRTYPE_CPP`
+- `PRTYPE_DEF`
+- `PRTYPE_NOARGS`
+- `PRTYPE_NOARRS`
+- `PRTYPE_NORES`
+- `PRTYPE_RESTORE`
+- `PRTYPE_NOREGEX`
+- `PRTYPE_COLORED`
+- `PRTYPE_METHODS`
+- `PRTYPE_1LINCMT`
+- `add_hidden_range`
+- `del_hidden_range`
+- `load_debugger`
+- `start_process`
+- `exit_process`
+- `suspend_process`
+- `get_processes`
+- `attach_process`
+- `detach_process`
+- `get_thread_qty`
+- `getn_thread`
+- `get_current_thread`
+- `getn_thread_name`
+- `select_thread`
+- `suspend_thread`
+- `resume_thread`
+- `step_into`
+- `step_over`
+- `run_to`
+- `step_until_ret`
+- `wait_for_next_event`
+- `WFNE_ANY`
+- `WFNE_SUSP`
+- `WFNE_SILENT`
+- `WFNE_CONT`
+- `WFNE_NOWAIT`
+- `NOTASK`
+- `DBG_ERROR`
+- `DBG_TIMEOUT`
+- `PROCESS_STARTED`
+- `PROCESS_EXITED`
+- `THREAD_STARTED`
+- `THREAD_EXITED`
+- `BREAKPOINT`
+- `STEP`
+- `EXCEPTION`
+- `LIB_LOADED`
+- `LIB_UNLOADED`
+- `INFORMATION`
+- `PROCESS_ATTACHED`
+- `PROCESS_DETACHED`
+- `PROCESS_SUSPENDED`
+- `refresh_debugger_memory`
+- `take_memory_snapshot`
+- `get_process_state`
+- `DSTATE_SUSP`
+- `DSTATE_NOTASK`
+- `DSTATE_RUN`
+- `DSTATE_RUN_WAIT_ATTACH`
+- `DSTATE_RUN_WAIT_END`: Get various information about the current debug event
+- `set_debugger_options`
+- `DOPT_SEGM_MSGS`
+- `DOPT_START_BPT`
+- `DOPT_THREAD_MSGS`
+- `DOPT_THREAD_BPT`
+- `DOPT_BPT_MSGS`
+- `DOPT_LIB_MSGS`
+- `DOPT_LIB_BPT`
+- `DOPT_INFO_MSGS`
+- `DOPT_INFO_BPT`
+- `DOPT_REAL_MEMORY`
+- `DOPT_REDO_STACK`
+- `DOPT_ENTRY_BPT`
+- `DOPT_EXCDLG`
+- `EXCDLG_NEVER`
+- `EXCDLG_UNKNOWN`
+- `EXCDLG_ALWAYS`
+- `DOPT_LOAD_DINFO`
+- `get_debugger_event_cond`
+- `set_debugger_event_cond`
+- `set_remote_debugger`
+- `define_exception`
+- `EXC_BREAK`
+- `EXC_HANDLE`
+- `get_reg_value`
+- `get_bpt_qty`
+- `BPTATTR_EA`
+- `BPTATTR_SIZE`
+- `BPTATTR_TYPE`
+- `BPT_WRITE`
+- `BPT_RDWR`
+- `BPT_SOFT`
+- `BPT_EXEC`
+- `BPT_DEFAULT`
+- `BPTATTR_COUNT`
+- `BPTATTR_FLAGS`
+- `BPT_BRK`
+- `BPT_TRACE`
+- `BPT_UPDMEM`
+- `BPT_ENABLED`
+- `BPT_LOWCND`
+- `BPT_TRACEON`
+- `BPT_TRACE_INSN`
+- `BPT_TRACE_FUNC`
+- `BPT_TRACE_BBLK`
+- `BPTATTR_COND`
+- `BPTATTR_PID`
+- `BPTATTR_TID`
+- `BPLT_ABS`
+- `BPLT_REL`
+- `BPLT_SYM`
+- `add_bpt`
+- `del_bpt`
+- `enable_bpt`
+- `check_bpt`
+- `BPTCK_NONE`
+- `BPTCK_NO`
+- `BPTCK_YES`
+- `BPTCK_ACT`
+- `TRACE_STEP`
+- `TRACE_INSN`
+- `TRACE_FUNC`
+- `get_step_trace_options`
+- `set_step_trace_options`
+- `ST_OVER_DEBUG_SEG`
+- `ST_OVER_LIB_FUNC`
+- `ST_ALREADY_LOGGED`
+- `ST_SKIP_LOOPS`
+- `load_trace_file`
+- `save_trace_file`
+- `is_valid_trace_file`
+- `diff_trace_file`
+- `get_trace_file_desc`
+- `set_trace_file_desc`
+- `get_tev_qty`
+- `get_tev_ea`
+- `TEV_NONE`
+- `TEV_INSN`
+- `TEV_CALL`
+- `TEV_RET`
+- `TEV_BPT`
+- `TEV_MEM`
+- `TEV_EVENT`
+- `get_tev_type`
+- `get_tev_tid`
+- `get_tev_reg`
+- `get_tev_mem_qty`
+- `get_tev_mem`
+- `get_tev_mem_ea`
+- `get_call_tev_callee`
+- `get_ret_tev_return`
+- `get_bpt_tev_ea`
+- `CIC_ITEM`
+- `CIC_FUNC`
+- `CIC_SEGM`
+- `DEFCOLOR`
+- `ARGV`: The command line arguments passed to IDA via the -S switch.
+
+## Functions Overview
+
+- `has_value(F)`
+- `byte_value(F)`: Get byte value from flags
+- `is_loaded(ea)`: Is the byte initialized?
+- `is_code(F)`
+- `is_data(F)`
+- `is_tail(F)`
+- `is_unknown(F)`
+- `is_head(F)`
+- `is_flow(F)`
+- `isExtra(F)`
+- `isRef(F)`
+- `hasName(F)`
+- `hasUserName(F)`
+- `is_defarg0(F)`
+- `is_defarg1(F)`
+- `isDec0(F)`
+- `isDec1(F)`
+- `isHex0(F)`
+- `isHex1(F)`
+- `isOct0(F)`
+- `isOct1(F)`
+- `isBin0(F)`
+- `isBin1(F)`
+- `is_off0(F)`
+- `is_off1(F)`
+- `is_char0(F)`
+- `is_char1(F)`
+- `is_seg0(F)`
+- `is_seg1(F)`
+- `is_enum0(F)`
+- `is_enum1(F)`
+- `is_manual0(F)`
+- `is_manual1(F)`
+- `is_stroff0(F)`
+- `is_stroff1(F)`
+- `is_stkvar0(F)`
+- `is_stkvar1(F)`
+- `is_byte(F)`
+- `is_word(F)`
+- `is_dword(F)`
+- `is_qword(F)`
+- `is_oword(F)`
+- `is_tbyte(F)`
+- `is_float(F)`
+- `is_double(F)`
+- `is_pack_real(F)`
+- `is_strlit(F)`
+- `is_struct(F)`
+- `is_align(F)`
+- `value_is_string(var)`
+- `value_is_long(var)`
+- `value_is_float(var)`
+- `value_is_func(var)`
+- `value_is_pvoid(var)`
+- `value_is_int64(var)`
+- `to_ea(seg, off)`: Return value of expression: ((seg<<4) + off)
+- `form(format, *args)`
+- `substr(s, x1, x2)`
+- `strstr(s1, s2)`
+- `strlen(s)`
+- `xtol(s)`
+- `atoa(ea)`: Convert address value to a string
+- `ltoa(n, radix)`
+- `atol(s)`
+- `rotate_left(value, count, nbits, offset)`: Rotate a value to the left (or right)
+- `rotate_dword(x, count)`
+- `rotate_word(x, count)`
+- `rotate_byte(x, count)`
+- `eval_idc(expr)`: Evaluate an IDC expression
+- `EVAL_FAILURE(code)`: Check the result of eval_idc() for evaluation failures
+- `save_database(idbname, flags=0)`: Save current database to the specified idb file
+- `validate_idb_names(do_repair=0)`: check consistency of IDB name records
+- `call_system(command)`: Execute an OS command.
+- `qsleep(milliseconds)`: qsleep the specified number of milliseconds
+- `delete_all_segments()`: Delete all segments, instructions, comments, i.e. everything
+- `plan_and_wait(sEA, eEA, final_pass=True)`: Perform full analysis of the range
+- `set_name(ea, name, flags=ida_name.SN_CHECK)`: Rename an address
+- `make_array(ea, nitems)`: Create an array.
+- `create_strlit(ea, endea)`: Create a string.
+- `create_byte(ea)`: Convert the current item to a byte
+- `create_word(ea)`: Convert the current item to a word (2 bytes)
+- `create_dword(ea)`: Convert the current item to a double word (4 bytes)
+- `create_qword(ea)`: Convert the current item to a quadro word (8 bytes)
+- `create_oword(ea)`: Convert the current item to an octa word (16 bytes/128 bits)
+- `create_yword(ea)`: Convert the current item to a ymm word (32 bytes/256 bits)
+- `create_float(ea)`: Convert the current item to a floating point (4 bytes)
+- `create_double(ea)`: Convert the current item to a double floating point (8 bytes)
+- `create_pack_real(ea)`: Convert the current item to a packed real (10 or 12 bytes)
+- `create_tbyte(ea)`: Convert the current item to a tbyte (10 or 12 bytes)
+- `create_struct(ea, size, strname)`: Convert the current item to a structure instance
+- `define_local_var(start, end, location, name)`: Create a local variable
+- `set_array_params(ea, flags, litems, align)`: Set array representation format
+- `op_plain_offset(ea, n, base)`: Convert operand to an offset
+- `toggle_bnot(ea, n)`: Toggle the bitwise not operator for the operand
+- `op_stroff(ea, n, strid, delta)`: Convert operand to an offset in a structure
+- `op_offset_high16(ea, n, target)`: Convert operand to a high offset
+- `MakeVar(ea)`
+- `split_sreg_range(ea, reg, value, tag=SR_user)`: Set value of a segment register.
+- `AutoMark(ea, qtype)`: Plan to analyze an address
+- `gen_file(filetype, path, ea1, ea2, flags)`: Generate an output file
+- `gen_flow_graph(outfile, title, ea1, ea2, flags)`: Generate a flow chart GDL file
+- `gen_simple_call_chart(outfile, title, flags)`: Generate a function call graph GDL file
+- `idadir()`: Get IDA directory
+- `get_idb_path()`: Get IDB full path
+- `get_bytes(ea, size, use_dbg=False)`: Return the specified number of bytes of the program
+- `read_dbg_byte(ea)`: Get value of program byte using the debugger memory
+- `read_dbg_word(ea)`: Get value of program word using the debugger memory
+- `read_dbg_dword(ea)`: Get value of program double-word using the debugger memory
+- `read_dbg_qword(ea)`: Get value of program quadro-word using the debugger memory
+- `write_dbg_memory(ea, data)`: Write to debugger memory.
+- `GetFloat(ea)`: Get value of a floating point number (4 bytes)
+- `GetDouble(ea)`: Get value of a floating point number (8 bytes)
+- `get_name_ea_simple(name)`: Get linear address of a name
+- `get_segm_by_sel(base)`: Get segment by segment base
+- `get_curline()`: Get the disassembly line at the cursor
+- `read_selection_start()`: Get start address of the selected range
+- `read_selection_end()`: Get end address of the selected range
+- `get_sreg(ea, reg)`: Get value of segment register at the specified address
+- `next_head(ea, maxea=BADADDR)`: Get next defined item (instruction or data) in the program
+- `prev_head(ea, minea=0)`: Get previous defined item (instruction or data) in the program
+- `get_item_size(ea)`: Get size of instruction or data item in bytes
+- `func_contains(func_ea, ea)`: Does the given function contain the given address?
+- `get_name(ea, gtn_flags=0)`: Get name at the specified address
+- `demangle_name(name, disable_mask)`: demangle_name a name
+- `generate_disasm_line(ea, flags)`: Get disassembly line
+- `GetDisasm(ea)`: Get disassembly line
+- `print_insn_mnem(ea)`: Get instruction mnemonics
+- `print_operand(ea, n)`: Get operand of an instruction or data
+- `get_operand_type(ea, n)`: Get type of instruction operand
+- `get_operand_value(ea, n)`: Get number used in the operand
+- `get_strlit_contents(ea, length=-1, strtype=STRTYPE_C)`: Get string contents
+- `get_str_type(ea)`: Get string type
+- `process_config_line(directive)`: Obsolete. Please use ida_idp.process_config_directive().
+- `get_inf_attr(attr)`: Deprecated. Please ida_ida.inf_get_* instead.
+- `set_inf_attr(attr, value)`: Deprecated. Please ida_ida.inf_set_* instead.
+- `SetPrcsr(processor)`
+- `get_processor_name()`: Get name of the current processor
+- `batch(batch)`: Enable/disable batch mode of operation
+- `process_ui_action(name, flags=0)`: Invokes an IDA UI action by name
+- `sel2para(sel)`: Get a selector value
+- `find_selector(val)`: Find a selector which has the specified value
+- `get_first_seg()`: Get first segment
+- `get_next_seg(ea)`: Get next segment
+- `get_segm_start(ea)`: Get start address of a segment
+- `get_segm_end(ea)`: Get end address of a segment
+- `get_segm_name(ea)`: Get name of a segment
+- `add_segm_ex(startea, endea, base, use32, align, comb, flags)`: Create a new segment
+- `AddSeg(startea, endea, base, use32, align, comb)`
+- `set_segment_bounds(ea, startea, endea, flags)`: Change segment boundaries
+- `set_segm_name(ea, name)`: Change name of the segment
+- `set_segm_class(ea, segclass)`: Change class of the segment
+- `set_segm_alignment(ea, alignment)`: Change alignment of the segment
+- `set_segm_combination(segea, comb)`: Change combination of the segment
+- `set_segm_addressing(ea, bitness)`: Change segment addressing
+- `selector_by_name(segname)`: Get segment selector by name
+- `set_default_sreg_value(ea, reg, value)`: Set default segment register value for a segment
+- `set_segm_type(segea, segtype)`: Set segment type
+- `get_segm_attr(segea, attr)`: Get segment attribute
+- `set_segm_attr(segea, attr, value)`: Set segment attribute
+- `move_segm(ea, to, flags)`: Move a segment to a new address
+- `get_xref_type()`: Return type of the last xref obtained by
+- `fopen(f, mode)`
+- `fclose(handle)`
+- `filelength(handle)`
+- `fseek(handle, offset, origin)`
+- `ftell(handle)`
+- `LoadFile(filepath, pos, ea, size)`: Load file into IDA database
+- `loadfile(filepath, pos, ea, size)`
+- `SaveFile(filepath, pos, ea, size)`: Save from IDA database to file
+- `savefile(filepath, pos, ea, size)`
+- `fgetc(handle)`
+- `fputc(byte, handle)`
+- `fprintf(handle, format, *args)`
+- `readshort(handle, mostfirst)`
+- `readlong(handle, mostfirst)`
+- `writeshort(handle, word, mostfirst)`
+- `writelong(handle, dword, mostfirst)`
+- `readstr(handle)`
+- `writestr(handle, s)`
+- `get_next_func(ea)`: Find next function
+- `get_prev_func(ea)`: Find previous function
+- `get_func_attr(ea, attr)`: Get a function attribute
+- `set_func_attr(ea, attr, value)`: Set a function attribute
+- `get_func_flags(ea)`: Retrieve function flags
+- `set_func_flags(ea, flags)`: Change function flags
+- `get_func_name(ea)`: Retrieve function name
+- `get_func_cmt(ea, repeatable)`: Retrieve function comment
+- `set_func_cmt(ea, cmt, repeatable)`: Set function comment
+- `choose_func(title)`: Ask the user to select a function
+- `get_func_off_str(ea)`: Convert address to 'funcname+offset' string
+- `find_func_end(ea)`: Determine a new function boundaries
+- `get_frame_id(ea)`: Get ID of function frame structure
+- `get_frame_lvar_size(ea)`: Get size of local variables in function frame
+- `get_frame_regs_size(ea)`: Get size of saved registers in function frame
+- `get_frame_args_size(ea)`: Get size of arguments in function frame which are purged upon return
+- `get_frame_size(ea)`: Get full size of function frame
+- `set_frame_size(ea, lvsize, frregs, argsize)`: Make function frame
+- `get_spd(ea)`: Get current delta for the stack pointer
+- `get_sp_delta(ea)`: Get modification of SP made by the instruction
+- `get_fchunk_attr(ea, attr)`: Get a function chunk attribute
+- `set_fchunk_attr(ea, attr, value)`: Set a function chunk attribute
+- `get_next_fchunk(ea)`: Get next function chunk
+- `get_prev_fchunk(ea)`: Get previous function chunk
+- `append_func_tail(funcea, ea1, ea2)`: Append a function chunk to the function
+- `remove_fchunk(funcea, tailea)`: Remove a function chunk from the function
+- `set_tail_owner(tailea, funcea)`: Change the function chunk owner
+- `first_func_chunk(funcea)`: Get the first function chunk of the specified function
+- `next_func_chunk(funcea, tailea)`: Get the next function chunk of the specified function
+- `add_auto_stkpnt(func_ea, ea, delta)`: Add automatic SP register change point
+- `del_stkpnt(func_ea, ea)`: Delete SP register change point
+- `get_min_spd_ea(func_ea)`: Return the address with the minimal spd (stack pointer delta)
+- `get_fixup_target_type(ea)`: Get fixup target type
+- `get_fixup_target_flags(ea)`: Get fixup target flags
+- `get_fixup_target_sel(ea)`: Get fixup target selector
+- `get_fixup_target_off(ea)`: Get fixup target offset
+- `get_fixup_target_dis(ea)`: Get fixup target displacement
+- `set_fixup(ea, fixuptype, fixupflags, targetsel, targetoff, displ)`: Set fixup information
+- `get_struc_id(name)`
+- `get_struc_name(tid)`
+- `get_struc_cmt(tid)`
+- `get_struc_size(tid)`
+- `get_member_qty(sid)`: Get number of members of a structure
+- `get_member_by_idx(sid, idx)`: Get member ID by member ordinal number
+- `is_member_id(sid)`: Is a member id?
+- `get_member_id(sid, member_offset)`
+- `get_member_offset(sid, member_name)`: Get offset of a member of a structure by the member name
+- `get_member_name(sid, member_offset)`: Get name of a member of a structure
+- `get_member_cmt(sid, member_offset, repeatable=True)`: Get comment of a member
+- `get_member_size(sid, member_offset)`: Get size of a member
+- `get_member_strid(sid, member_offset)`: Get structure id of a member
+- `is_union(sid)`: Is a structure a union?
+- `add_struc(index, name, is_union)`: Define a new structure type
+- `del_struc(sid)`: Delete a structure type
+- `set_struc_name(sid, name)`
+- `set_struc_cmt(sid, cmt, repeatable=True)`
+- `add_struc_member(sid, name, offset, flag, typeid, nbytes, target=-1, tdelta=0, reftype=REF_OFF32)`: Add structure member
+- `del_struc_member(sid, member_offset)`: Delete structure member
+- `set_member_name(sid, member_offset, name)`: Change structure member name
+- `set_member_type(sid, member_offset, flag, typeid, nitems, target=-1, tdelta=0, reftype=REF_OFF32)`: Change structure member type
+- `set_member_cmt(sid, member_offset, comment, repeatable)`: Change structure member comment
+- `expand_struc(sid, offset, delta, recalc=True)`: Expand or shrink a structure type
+- `get_enum(name)`: Get enum by name
+- `get_enum_name(enum_id, flags=0)`: Get name of enum
+- `get_enum_cmt(enum_id)`: Get enum comment
+- `get_enum_size(enum_id)`: Get the number of the members of the enum
+- `get_enum_width(enum_id)`: Get the width of a enum element
+- `get_enum_flag(enum_id)`: Get flags determining the representation of the enum.
+- `get_enum_member_by_name(name)`: Get a reference to an enum member by its name
+- `get_enum_member_enum(const_id)`: Get the parent enum of an enum member
+- `get_enum_member(enum_id, value, serial, bmask)`: Get id of constant
+- `get_first_bmask(enum_id)`: Get first bitmask in the enum
+- `get_last_bmask(enum_id)`: Get last bitmask in the enum
+- `get_next_bmask(enum_id, bmask)`: Get next bitmask in the enum
+- `get_prev_bmask(enum_id, bmask)`: Get prev bitmask in the enum
+- `get_bmask_name(enum_id, bmask)`: Get bitmask name (only for bitfields)
+- `get_bmask_cmt(enum_id, bmask, repeatable)`: Get bitmask comment (only for bitfields)
+- `set_bmask_name(enum_id, bmask, name)`: Set bitmask name (only for bitfields)
+- `set_bmask_cmt(enum_id, bmask, cmt, repeatable)`: Set bitmask comment (only for bitfields)
+- `get_first_enum_member(enum_id, bmask=-1)`: Get first constant in the enum
+- `get_last_enum_member(enum_id, bmask=-1)`: Get last constant in the enum
+- `get_next_enum_member(enum_id, value, bmask=-1)`: Get next constant in the enum
+- `get_prev_enum_member(enum_id, value, bmask=-1)`: Get prev constant in the enum
+- `get_enum_member_name(const_id)`: Get name of a constant
+- `get_enum_member_cmt(const_id, repeatable=True)`: Get comment of a constant
+- `get_enum_member_value(const_id)`: Get value of an enum member
+- `get_enum_member_bmask(const_id)`: Get bitmask of an enum member
+- `add_enum(idx, name, flag)`: Add a new enum type
+- `del_enum(enum_id)`: Delete an enum type
+- `set_enum_name(enum_id, name)`: Set name of enum type
+- `set_enum_flag(enum_id, flag)`: Set enum constant representation flags
+- `set_enum_width(enum_id, nbytes)`: Set the width of enum base type
+- `is_bf(enum_id)`: Is enum a bitmask ?
+- `set_enum_bf(enum_id, bf)`: Set or clear the 'bitmask' attribute of an enum
+- `set_enum_cmt(enum_id, cmt, repeatable)`: Set comment for enum type
+- `add_enum_member(enum_id, name, value, bmask=-1)`: Add a member of enum - a symbolic constant
+- `del_enum_member(enum_id, value, serial, bmask=-1)`: Delete a member of enum - a symbolic constant
+- `set_enum_member_name(const_id, name)`: Set name of enum member
+- `set_enum_member_cmt(const_id, cmt, repeatable=False)`: Set comment for enum member
+- `create_array(name)`: Create array.
+- `get_array_id(name)`: Get array array_id, by name.
+- `rename_array(array_id, newname)`: Rename array, by its ID.
+- `delete_array(array_id)`: Delete array, by its ID.
+- `set_array_long(array_id, idx, value)`: Sets the long value of an array element.
+- `set_array_string(array_id, idx, value)`: Sets the string value of an array element.
+- `get_array_element(tag, array_id, idx)`: Get value of array element.
+- `del_array_element(tag, array_id, idx)`: Delete an array element.
+- `get_first_index(tag, array_id)`: Get index of the first existing array element.
+- `get_last_index(tag, array_id)`: Get index of last existing array element.
+- `get_next_index(tag, array_id, idx)`: Get index of the next existing array element.
+- `get_prev_index(tag, array_id, idx)`: Get index of the previous existing array element.
+- `set_hash_long(hash_id, key, value)`: Sets the long value of a hash element.
+- `get_hash_long(hash_id, key)`: Gets the long value of a hash element.
+- `set_hash_string(hash_id, key, value)`: Sets the string value of a hash element.
+- `get_hash_string(hash_id, key)`: Gets the string value of a hash element.
+- `del_hash_string(hash_id, key)`: Delete a hash element.
+- `get_first_hash_key(hash_id)`: Get the first key in the hash.
+- `get_last_hash_key(hash_id)`: Get the last key in the hash.
+- `get_next_hash_key(hash_id, key)`: Get the next key in the hash.
+- `get_prev_hash_key(hash_id, key)`: Get the previous key in the hash.
+- `add_default_til(name)`: Load a type library
+- `import_type(idx, type_name)`: Copy information from type library to database
+- `get_type(ea)`: Get type of function/variable
+- `sizeof(typestr)`: Returns the size of the type. It is equivalent to IDC's sizeof().
+- `get_tinfo(ea)`: Get type information of function/variable as 'typeinfo' object
+- `get_local_tinfo(ordinal)`: Get local type information as 'typeinfo' object
+- `guess_type(ea)`: Guess type of function/variable
+- `apply_type(ea, py_type, flags=TINFO_DEFINITE)`: Apply the specified type to the address
+- `SetType(ea, newtype)`: Set type of function/variable
+- `parse_decl(inputtype, flags)`: Parse type declaration
+- `parse_decls(inputtype, flags=0)`: Parse type declarations
+- `print_decls(ordinals, flags)`: Print types in a format suitable for use in a header file
+- `get_ordinal_limit()`: Get number of local types + 1
+- `set_local_type(ordinal, input, flags)`: Parse one type declaration and store it in the specified slot
+- `GetLocalType(ordinal, flags)`: Retrieve a local type declaration
+- `get_numbered_type_name(ordinal)`: Retrieve a local type name
+- `update_hidden_range(ea, visible)`: Set hidden range state
+- `get_first_module()`: Enumerate process modules
+- `get_next_module(base)`: Enumerate process modules
+- `get_module_name(base)`: Get process module name
+- `get_module_size(base)`: Get process module size
+- `resume_process()`
+- `send_dbg_command(cmd)`: Sends a command to the debugger module and returns the output string.
+- `get_event_id()`: Get ID of debug event
+- `get_event_pid()`: Get process ID for debug event
+- `get_event_tid()`: Get type ID for debug event
+- `get_event_ea()`: Get ea for debug event
+- `is_event_handled()`: Is the debug event handled?
+- `get_event_module_name()`: Get module name for debug event
+- `get_event_module_base()`: Get module base for debug event
+- `get_event_module_size()`: Get module size for debug event
+- `get_event_exit_code()`: Get exit code for debug event
+- `get_event_info()`: Get debug event info
+- `get_event_bpt_hea()`: Get hardware address for BREAKPOINT event
+- `get_event_exc_code()`: Get exception code for EXCEPTION event
+- `get_event_exc_ea()`: Get address for EXCEPTION event
+- `can_exc_continue()`: Can it continue after EXCEPTION event?
+- `get_event_exc_info()`: Get info for EXCEPTION event
+- `set_reg_value(value, name)`: Set register value
+- `get_bpt_ea(n)`: Get breakpoint address
+- `get_bpt_attr(ea, bptattr)`: Get the characteristics of a breakpoint
+- `set_bpt_attr(address, bptattr, value)`: modifiable characteristics of a breakpoint
+- `set_bpt_cond(ea, cnd, is_lowcnd=0)`: Set breakpoint condition
+- `enable_tracing(trace_level, enable)`: Enable step tracing
+- `clear_trace(filename)`: Clear the current trace buffer
+- `get_color(ea, what)`: Get item color
+- `set_color(ea, what, color)`: Set item color
+- `force_bl_jump(ea)`: Some ARM compilers in Thumb mode use BL (branch-and-link)
+- `force_bl_call(ea)`: Force BL instruction to be a call
+- `set_flag(off, bit, value)`
+- `here()`
+- `is_mapped(ea)`

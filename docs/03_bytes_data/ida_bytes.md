@@ -1,0 +1,470 @@
+# ida_bytes
+
+Contains functions that deal with individual byte characteristics.
+
+Each byte of the disassembled program is represented by a 32-bit value. We will
+call this value flags. The structure of the flags is here.
+
+You are not allowed to inspect individual bits of flags and modify them directly.
+Use special functions to inspect and/or modify flags.
+
+Flags are kept in a virtual array file (*.id1). Addresses (ea) are all 32-bit
+(or 64-bit) quantities.
+
+## Constants
+
+- `ITEM_END_FIXUP`: stop at the first fixup
+- `ITEM_END_INITED`: stop when initialization changes i.e.
+- `ITEM_END_NAME`: stop at the first named location
+- `ITEM_END_XREF`: stop at the first referenced location
+- `ITEM_END_CANCEL`: stop when operation cancelled, it is the responsibility of the caller to show the wait dialog
+- `GFE_VALUE`: get flags with FF_IVL & MS_VAL. It is much slower under remote debugging because the kernel needs to read the process memory.
+- `GFE_IDB_VALUE`: get flags with FF_IVL & MS_VAL. but never use the debugger memory.
+- `GFE_32BIT`: get only low 32 bits of flags
+- `MS_VAL`: Mask for byte value.
+- `FF_IVL`: Byte has value ?
+- `GMB_READALL`: try to read all bytes; if this bit is not set, fail at first uninited byte
+- `GMB_WAITBOX`: show wait box (may return -1 in this case)
+- `MS_CLS`: Mask for typing.
+- `FF_CODE`: Code ?
+- `FF_DATA`: Data ?
+- `FF_TAIL`: Tail ?
+- `FF_UNK`: Unknown ?
+- `DELIT_SIMPLE`: simply undefine the specified item(s)
+- `DELIT_EXPAND`: propagate undefined items; for example if removing an instruction removes all references to the next instruction, then plan to convert to unexplored the next instruction too.
+- `DELIT_DELNAMES`: delete any names at the specified address range (except for the starting address). this bit is valid if nbytes > 1
+- `DELIT_NOTRUNC`: don't truncate the current function even if AF_TRFUNC is set
+- `DELIT_NOUNAME`: reject to delete if a user name is in address range (except for the starting address). this bit is valid if nbytes > 1
+- `DELIT_NOCMT`: reject to delete if a comment is in address range (except for the starting address). this bit is valid if nbytes > 1
+- `DELIT_KEEPFUNC`: do not undefine the function start. Just delete xrefs, ops e.t.c.
+- `MS_COMM`: Mask of common bits.
+- `FF_COMM`: Has comment?
+- `FF_REF`: has references
+- `FF_LINE`: Has next or prev lines?
+- `FF_NAME`: Has name?
+- `FF_LABL`: Has dummy name?
+- `FF_FLOW`: Exec flow from prev instruction.
+- `FF_SIGN`: Inverted sign of operands.
+- `FF_BNOT`: Bitwise negation of operands.
+- `FF_UNUSED`: unused bit (was used for variable bytes)
+- `FF_ANYNAME`: Has name or dummy name?
+- `MS_N_TYPE`: Mask for nth arg (a 64-bit constant)
+- `FF_N_VOID`: Void (unknown)?
+- `FF_N_NUMH`: Hexadecimal number?
+- `FF_N_NUMD`: Decimal number?
+- `FF_N_CHAR`: Char ('x')?
+- `FF_N_SEG`: Segment?
+- `FF_N_OFF`: Offset?
+- `FF_N_NUMB`: Binary number?
+- `FF_N_NUMO`: Octal number?
+- `FF_N_ENUM`: Enumeration?
+- `FF_N_FOP`: Forced operand?
+- `FF_N_STRO`: Struct offset?
+- `FF_N_STK`: Stack variable?
+- `FF_N_FLT`: Floating point number?
+- `FF_N_CUST`: Custom representation?
+- `OPND_OUTER`: outer offset base (combined with operand number). used only in set, get, del_offset() functions
+- `OPND_MASK`: mask for operand number
+- `OPND_ALL`: all operands
+- `DT_TYPE`: Mask for DATA typing.
+- `FF_BYTE`: byte
+- `FF_WORD`: word
+- `FF_DWORD`: double word
+- `FF_QWORD`: quadro word
+- `FF_TBYTE`: tbyte
+- `FF_STRLIT`: string literal
+- `FF_STRUCT`: struct variable
+- `FF_OWORD`: octaword/xmm word (16 bytes/128 bits)
+- `FF_FLOAT`: float
+- `FF_DOUBLE`: double
+- `FF_PACKREAL`: packed decimal real
+- `FF_ALIGN`: alignment directive
+- `FF_CUSTOM`: custom data type
+- `FF_YWORD`: ymm word (32 bytes/256 bits)
+- `FF_ZWORD`: zmm word (64 bytes/512 bits)
+- `ALOPT_IGNHEADS`: don't stop if another data item is encountered. only the byte values will be used to determine the string length. if not set, a defined data item or instruction will truncate the string
+- `ALOPT_IGNPRINT`: if set, don't stop at non-printable codepoints, but only at the terminating character (or not unicode-mapped character (e.g., 0x8f in CP1252))
+- `ALOPT_IGNCLT`: if set, don't stop at codepoints that are not part of the current 'culture'; accept all those that are graphical (this is typically used used by user-initiated actions creating string literals.)
+- `ALOPT_MAX4K`: if string length is more than 4K, return the accumulated length
+- `ALOPT_ONLYTERM`: only the termination characters can be at the string end. Without this option illegal characters also terminate the string.
+- `ALOPT_APPEND`: if an existing strlit is encountered, then append it to the string.
+- `STRCONV_ESCAPE`: convert non-printable characters to C escapes (
+- `STRCONV_REPLCHAR`: convert non-printable characters to the Unicode replacement character (U+FFFD)
+- `STRCONV_INCLLEN`: for Pascal-style strings, include the prefixing length byte(s) as C-escaped sequence
+- `PSTF_TNORM`: use normal name
+- `PSTF_TBRIEF`: use brief name (e.g., in the 'Strings' window)
+- `PSTF_TINLIN`: use 'inline' name (e.g., in the structures comments)
+- `PSTF_TMASK`: type mask
+- `PSTF_HOTKEY`: have hotkey markers part of the name
+- `PSTF_ENC`: if encoding is specified, append it
+- `PSTF_ONLY_ENC`: generate only the encoding name
+- `PSTF_ATTRIB`: generate for type attribute usage
+- `MS_CODE`: Mask for code bits.
+- `FF_FUNC`: function start?
+- `FF_IMMD`: Has Immediate value ?
+- `FF_JUMP`: Has jump table or switch_info?
+- `DTP_NODUP`: do not use dup construct
+- `PBSENC_DEF1BPU`: Use the default 1 byte-per-unit IDB encoding.
+- `PBSENC_ALL`: Use all IDB encodings.
+- `BIN_SEARCH_CASE`: case sensitive
+- `BIN_SEARCH_NOCASE`: case insensitive
+- `BIN_SEARCH_NOBREAK`: don't check for Ctrl-Break
+- `BIN_SEARCH_INITED`: find_byte, find_byter: any initilized value
+- `BIN_SEARCH_NOSHOW`: don't show search progress or update screen
+- `BIN_SEARCH_FORWARD`: search forward for bytes
+- `BIN_SEARCH_BACKWARD`: search backward for bytes
+- `BIN_SEARCH_BITMASK`: searching using strict bit mask
+- `MS_0TYPE`
+- `FF_0VOID`
+- `FF_0NUMH`
+- `FF_0NUMD`
+- `FF_0CHAR`
+- `FF_0SEG`
+- `FF_0OFF`
+- `FF_0NUMB`
+- `FF_0NUMO`
+- `FF_0ENUM`
+- `FF_0FOP`
+- `FF_0STRO`
+- `FF_0STK`
+- `FF_0FLT`
+- `FF_0CUST`
+- `MS_1TYPE`
+- `FF_1VOID`
+- `FF_1NUMH`
+- `FF_1NUMD`
+- `FF_1CHAR`
+- `FF_1SEG`
+- `FF_1OFF`
+- `FF_1NUMB`
+- `FF_1NUMO`
+- `FF_1ENUM`
+- `FF_1FOP`
+- `FF_1STRO`
+- `FF_1STK`
+- `FF_1FLT`
+- `FF_1CUST`
+- `DTP_NODUP`: do not use dup construct
+
+## Classes Overview
+
+- `compiled_binpat_vec_t`
+- `octet_generator_t`
+- `data_type_t`: Information about a data type
+- `data_format_t`: Information about a data format
+- `compiled_binpat_t`
+- `hidden_range_t`
+
+## Functions Overview
+
+- `enable_flags(start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, stt: storage_type_t) -> error_t`: Allocate flags for address range. This function does not change the storage type of existing ranges. Exit with an error message if not enough disk space.
+- `disable_flags(start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t) -> error_t`: Deallocate flags for address range. Exit with an error message if not enough disk space (this may occur too).
+- `change_storage_type(start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, stt: storage_type_t) -> error_t`: Change flag storage type for address range.
+- `next_addr(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get next address in the program (i.e. next address which has flags).
+- `prev_addr(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get previous address in the program.
+- `next_chunk(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get the first address of next contiguous chunk in the program.
+- `prev_chunk(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get the last address of previous contiguous chunk in the program.
+- `chunk_start(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get start of the contiguous address block containing 'ea'.
+- `chunk_size(ea: ida_idaapi.ea_t) -> asize_t`: Get size of the contiguous address block containing 'ea'.
+- `find_free_chunk(start: ida_idaapi.ea_t, size: asize_t, alignment: asize_t) -> ida_idaapi.ea_t`: Search for a hole in the addressing space of the program.
+- `next_that(ea: ida_idaapi.ea_t, maxea: ida_idaapi.ea_t, testf: testf_t *) -> ida_idaapi.ea_t`: Find next address with a flag satisfying the function 'testf'.
+- `next_unknown(ea: ida_idaapi.ea_t, maxea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Similar to next_that(), but will find the next address that is unexplored.
+- `prev_that(ea: ida_idaapi.ea_t, minea: ida_idaapi.ea_t, testf: testf_t *) -> ida_idaapi.ea_t`: Find previous address with a flag satisfying the function 'testf'.
+- `prev_unknown(ea: ida_idaapi.ea_t, minea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Similar to prev_that(), but will find the previous address that is unexplored.
+- `prev_head(ea: ida_idaapi.ea_t, minea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get start of previous defined item.
+- `next_head(ea: ida_idaapi.ea_t, maxea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get start of next defined item.
+- `prev_not_tail(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get address of previous non-tail byte.
+- `next_not_tail(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get address of next non-tail byte.
+- `prev_visea(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get previous visible address.
+- `next_visea(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get next visible address.
+- `get_item_head(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get the start address of the item at 'ea'. If there is no current item, then 'ea' will be returned (see definition at the end of bytes.hpp source)
+- `get_item_end(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Get the end address of the item at 'ea'. The returned address doesn't belong to the current item. Unexplored bytes are counted as 1 byte entities.
+- `calc_max_item_end(ea: ida_idaapi.ea_t, how: int = 15) -> ida_idaapi.ea_t`: Calculate maximal reasonable end address of a new item. This function will limit the item with the current segment bounds.
+- `get_item_size(ea: ida_idaapi.ea_t) -> asize_t`: Get size of item (instruction/data) in bytes. Unexplored bytes have length of 1 byte. This function returns 0 only for BADADDR.
+- `is_mapped(ea: ida_idaapi.ea_t) -> bool`: Is the specified address 'ea' present in the program?
+- `get_flags_ex(ea: ida_idaapi.ea_t, how: int) -> flags64_t`: Get flags for the specified address, extended form.
+- `get_flags32(ea: ida_idaapi.ea_t) -> flags64_t`: Get only 32 low bits of flags. This function returns the most commonly used bits of the flags. However, it does not return the operand info for the operands beyond the first two operands (0,1). If you need to deal with the operands (2..n), then use get_flags(). It is customary to assign the return value to the variable named "F32", to distinguish is from 64-bit flags.
+- `get_flags(ea: ida_idaapi.ea_t) -> flags64_t`: Get flags value for address 'ea'. The byte value is not included in the flags. This function should be used if the operand types of any operand beyond the first two operands is required. This function is more expensive to use than get_flags32()
+- `get_full_flags(ea: ida_idaapi.ea_t) -> flags64_t`: Get full flags value for address 'ea'. This function returns the byte value in the flags as well. See FF_IVL and MS_VAL. This function is more expensive to use than get_flags()
+- `get_item_flag(_from: ida_idaapi.ea_t, n: int, ea: ida_idaapi.ea_t, appzero: bool) -> flags64_t`: Get flag of the item at 'ea' even if it is a tail byte of some array or structure. This function is used to get flags of structure members or array elements.
+- `get_item_refinfo(ri: refinfo_t, ea: ida_idaapi.ea_t, n: int) -> bool`: Get refinfo of the item at 'ea'. This function works for a regular offset operand as well as for a tail byte of a structure variable (in this case refinfo to corresponding structure member will be returned)
+- `has_value(F: flags64_t) -> bool`: Do flags contain byte value?
+- `del_value(ea: ida_idaapi.ea_t) -> None`: Delete byte value from flags. The corresponding byte becomes uninitialized.
+- `is_loaded(ea: ida_idaapi.ea_t) -> bool`: Does the specified address have a byte value (is initialized?)
+- `nbits(ea: ida_idaapi.ea_t) -> int`: Get number of bits in a byte at the given address.
+- `bytesize(ea: ida_idaapi.ea_t) -> int`: Get number of bytes required to store a byte at the given address.
+- `get_byte(ea: ida_idaapi.ea_t) -> uchar`: Get one byte (8-bit) of the program at 'ea'. This function works only for 8bit byte processors.
+- `get_db_byte(ea: ida_idaapi.ea_t) -> uchar`: Get one byte (8-bit) of the program at 'ea' from the database. Works even if the debugger is active. See also get_dbg_byte() to read the process memory directly. This function works only for 8bit byte processors.
+- `get_word(ea: ida_idaapi.ea_t) -> ushort`: Get one word (16-bit) of the program at 'ea'. This function takes into account order of bytes specified in idainfo::is_be() This function works only for 8bit byte processors.
+- `get_dword(ea: ida_idaapi.ea_t) -> int`: Get one dword (32-bit) of the program at 'ea'. This function takes into account order of bytes specified in idainfo::is_be() This function works only for 8bit byte processors.
+- `get_qword(ea: ida_idaapi.ea_t) -> uint64`: Get one qword (64-bit) of the program at 'ea'. This function takes into account order of bytes specified in idainfo::is_be() This function works only for 8bit byte processors.
+- `get_wide_byte(ea: ida_idaapi.ea_t) -> uint64`: Get one wide byte of the program at 'ea'. Some processors may access more than 8bit quantity at an address. These processors have 32-bit byte organization from the IDA's point of view.
+- `get_wide_word(ea: ida_idaapi.ea_t) -> uint64`: Get one wide word (2 'byte') of the program at 'ea'. Some processors may access more than 8bit quantity at an address. These processors have 32-bit byte organization from the IDA's point of view. This function takes into account order of bytes specified in idainfo::is_be()
+- `get_wide_dword(ea: ida_idaapi.ea_t) -> uint64`: Get two wide words (4 'bytes') of the program at 'ea'. Some processors may access more than 8bit quantity at an address. These processors have 32-bit byte organization from the IDA's point of view. This function takes into account order of bytes specified in idainfo::is_be()
+- `get_octet(ogen: octet_generator_t) -> uchar *`
+- `get_16bit(ea: ida_idaapi.ea_t) -> int`: Get 16bits of the program at 'ea'.
+- `get_32bit(ea: ida_idaapi.ea_t) -> int`: Get not more than 32bits of the program at 'ea'.
+- `get_64bit(ea: ida_idaapi.ea_t) -> uint64`: Get not more than 64bits of the program at 'ea'.
+- `get_data_value(v: uval_t *, ea: ida_idaapi.ea_t, size: asize_t) -> bool`: Get the value at of the item at 'ea'. This function works with entities up to sizeof(ea_t) (bytes, word, etc)
+- `get_original_byte(ea: ida_idaapi.ea_t) -> uint64`: Get original byte value (that was before patching). This function works for wide byte processors too.
+- `get_original_word(ea: ida_idaapi.ea_t) -> uint64`: Get original word value (that was before patching). This function works for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `get_original_dword(ea: ida_idaapi.ea_t) -> uint64`: Get original dword (that was before patching) This function works for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `get_original_qword(ea: ida_idaapi.ea_t) -> uint64`: Get original qword value (that was before patching) This function DOESN'T work for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `put_byte(ea: ida_idaapi.ea_t, x: uint64) -> bool`: Set value of one byte of the program. This function modifies the database. If the debugger is active then the debugged process memory is patched too.
+- `put_word(ea: ida_idaapi.ea_t, x: uint64) -> None`: Set value of one word of the program. This function takes into account order of bytes specified in idainfo::is_be() This function works for wide byte processors too.
+- `put_dword(ea: ida_idaapi.ea_t, x: uint64) -> None`: Set value of one dword of the program. This function takes into account order of bytes specified in idainfo::is_be() This function works for wide byte processors too.
+- `put_qword(ea: ida_idaapi.ea_t, x: uint64) -> None`: Set value of one qword (8 bytes) of the program. This function takes into account order of bytes specified in idainfo::is_be() This function DOESN'T works for wide byte processors.
+- `patch_byte(ea: ida_idaapi.ea_t, x: uint64) -> bool`: Patch a byte of the program. The original value of the byte is saved and can be obtained by get_original_byte(). This function works for wide byte processors too.
+- `patch_word(ea: ida_idaapi.ea_t, x: uint64) -> bool`: Patch a word of the program. The original value of the word is saved and can be obtained by get_original_word(). This function works for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `patch_dword(ea: ida_idaapi.ea_t, x: uint64) -> bool`: Patch a dword of the program. The original value of the dword is saved and can be obtained by get_original_dword(). This function DOESN'T work for wide byte processors. This function takes into account order of bytes specified in idainfo::is_be()
+- `patch_qword(ea: ida_idaapi.ea_t, x: uint64) -> bool`: Patch a qword of the program. The original value of the qword is saved and can be obtained by get_original_qword(). This function DOESN'T work for wide byte processors. This function takes into account order of bytes specified in idainfo::is_be()
+- `revert_byte(ea: ida_idaapi.ea_t) -> bool`: Revert patched byte
+- `add_byte(ea: ida_idaapi.ea_t, value: int) -> None`: Add a value to one byte of the program. This function works for wide byte processors too.
+- `add_word(ea: ida_idaapi.ea_t, value: uint64) -> None`: Add a value to one word of the program. This function works for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `add_dword(ea: ida_idaapi.ea_t, value: uint64) -> None`: Add a value to one dword of the program. This function works for wide byte processors too. This function takes into account order of bytes specified in idainfo::is_be()
+- `add_qword(ea: ida_idaapi.ea_t, value: uint64) -> None`: Add a value to one qword of the program. This function does not work for wide byte processors. This function takes into account order of bytes specified in idainfo::is_be()
+- `get_zero_ranges(zranges: rangeset_t, range: range_t) -> bool`: Return set of ranges with zero initialized bytes. The returned set includes only big zero initialized ranges (at least >1KB). Some zero initialized byte ranges may be not included. Only zero bytes that use the sparse storage method (STT_MM) are reported.
+- `put_bytes(ea: ida_idaapi.ea_t, buf: void const *) -> None`: Modify the specified number of bytes of the program. This function does not save the original values of bytes. See also patch_bytes().
+- `patch_bytes(ea: ida_idaapi.ea_t, buf: void const *) -> None`: Patch the specified number of bytes of the program. Original values of bytes are saved and are available with get_original...() functions. See also put_bytes().
+- `is_code(F: flags64_t) -> bool`: Does flag denote start of an instruction?
+- `f_is_code(F: flags64_t, arg2: void *) -> bool`: Does flag denote start of an instruction?
+- `is_data(F: flags64_t) -> bool`: Does flag denote start of data?
+- `f_is_data(F: flags64_t, arg2: void *) -> bool`: Does flag denote start of data?
+- `is_tail(F: flags64_t) -> bool`: Does flag denote tail byte?
+- `f_is_tail(F: flags64_t, arg2: void *) -> bool`: Does flag denote tail byte?
+- `is_not_tail(F: flags64_t) -> bool`: Does flag denote tail byte?
+- `f_is_not_tail(F: flags64_t, arg2: void *) -> bool`: Does flag denote tail byte?
+- `is_unknown(F: flags64_t) -> bool`: Does flag denote unexplored byte?
+- `is_head(F: flags64_t) -> bool`: Does flag denote start of instruction OR data?
+- `f_is_head(F: flags64_t, arg2: void *) -> bool`: Does flag denote start of instruction OR data?
+- `del_items(ea: ida_idaapi.ea_t, flags: int = 0, nbytes: asize_t = 1, may_destroy: may_destroy_cb_t * = None) -> bool`: Convert item (instruction/data) to unexplored bytes. The whole item (including the head and tail bytes) will be destroyed. It is allowed to pass any address in the item to this function
+- `is_manual_insn(ea: ida_idaapi.ea_t) -> bool`: Is the instruction overridden?
+- `get_manual_insn(ea: ida_idaapi.ea_t) -> str`: Retrieve the user-specified string for the manual instruction.
+- `set_manual_insn(ea: ida_idaapi.ea_t, manual_insn: str) -> None`: Set manual instruction string.
+- `is_flow(F: flags64_t) -> bool`: Does the previous instruction exist and pass execution flow to the current byte?
+- `has_extra_cmts(F: flags64_t) -> bool`: Does the current byte have additional anterior or posterior lines?
+- `f_has_extra_cmts(f: flags64_t, arg2: void *) -> bool`
+- `has_cmt(F: flags64_t) -> bool`: Does the current byte have an indented comment?
+- `f_has_cmt(f: flags64_t, arg2: void *) -> bool`
+- `has_xref(F: flags64_t) -> bool`: Does the current byte have cross-references to it?
+- `f_has_xref(f: flags64_t, arg2: void *) -> bool`: Does the current byte have cross-references to it?
+- `has_name(F: flags64_t) -> bool`: Does the current byte have non-trivial (non-dummy) name?
+- `f_has_name(f: flags64_t, arg2: void *) -> bool`: Does the current byte have non-trivial (non-dummy) name?
+- `has_dummy_name(F: flags64_t) -> bool`: Does the current byte have dummy (auto-generated, with special prefix) name?
+- `f_has_dummy_name(f: flags64_t, arg2: void *) -> bool`: Does the current byte have dummy (auto-generated, with special prefix) name?
+- `has_auto_name(F: flags64_t) -> bool`: Does the current byte have auto-generated (no special prefix) name?
+- `has_any_name(F: flags64_t) -> bool`: Does the current byte have any name?
+- `has_user_name(F: flags64_t) -> bool`: Does the current byte have user-specified name?
+- `f_has_user_name(F: flags64_t, arg2: void *) -> bool`: Does the current byte have user-specified name?
+- `is_invsign(ea: ida_idaapi.ea_t, F: flags64_t, n: int) -> bool`: Should sign of n-th operand inverted during output?. allowed values of n: 0-first operand, 1-other operands
+- `toggle_sign(ea: ida_idaapi.ea_t, n: int) -> bool`: Toggle sign of n-th operand. allowed values of n: 0-first operand, 1-other operands
+- `is_bnot(ea: ida_idaapi.ea_t, F: flags64_t, n: int) -> bool`: Should we negate the operand?. asm_t::a_bnot should be defined in the idp module in order to work with this function
+- `toggle_bnot(ea: ida_idaapi.ea_t, n: int) -> bool`: Toggle binary negation of operand. also see is_bnot()
+- `is_lzero(ea: ida_idaapi.ea_t, n: int) -> bool`: Display leading zeroes? Display leading zeroes in operands. The global switch for the leading zeroes is in idainfo::s_genflags Note: the leading zeroes doesn't work if for the target assembler octal numbers start with 0.
+- `set_lzero(ea: ida_idaapi.ea_t, n: int) -> bool`: Set toggle lzero bit. This function changes the display of leading zeroes for the specified operand. If the default is not to display leading zeroes, this function will display them and vice versa.
+- `clr_lzero(ea: ida_idaapi.ea_t, n: int) -> bool`: Clear toggle lzero bit. This function reset the display of leading zeroes for the specified operand to the default. If the default is not to display leading zeroes, leading zeroes will not be displayed, as vice versa.
+- `toggle_lzero(ea: ida_idaapi.ea_t, n: int) -> bool`: Toggle lzero bit.
+- `leading_zero_important(ea: ida_idaapi.ea_t, n: int) -> bool`: Check if leading zeroes are important.
+- `get_operand_type_shift(n: int) -> int`: Get the shift in flags64_t for the nibble representing operand n's type
+- `get_operand_flag(typebits: uint8, n: int) -> flags64_t`: Place operand n's type flag in the right nibble of a 64-bit flags set.
+- `is_flag_for_operand(F: flags64_t, typebits: uint8, n: int) -> bool`: Check that the 64-bit flags set has the expected type for operand n.
+- `is_defarg0(F: flags64_t) -> bool`: Is the first operand defined? Initially operand has no defined representation.
+- `is_defarg1(F: flags64_t) -> bool`: Is the second operand defined? Initially operand has no defined representation.
+- `is_off0(F: flags64_t) -> bool`: Is the first operand offset? (example: push offset xxx)
+- `is_off1(F: flags64_t) -> bool`: Is the second operand offset? (example: mov ax, offset xxx)
+- `is_char0(F: flags64_t) -> bool`: Is the first operand character constant? (example: push 'a')
+- `is_char1(F: flags64_t) -> bool`: Is the second operand character constant? (example: mov al, 'a')
+- `is_seg0(F: flags64_t) -> bool`: Is the first operand segment selector? (example: push seg seg001)
+- `is_seg1(F: flags64_t) -> bool`: Is the second operand segment selector? (example: mov dx, seg dseg)
+- `is_enum0(F: flags64_t) -> bool`: Is the first operand a symbolic constant (enum member)?
+- `is_enum1(F: flags64_t) -> bool`: Is the second operand a symbolic constant (enum member)?
+- `is_stroff0(F: flags64_t) -> bool`: Is the first operand an offset within a struct?
+- `is_stroff1(F: flags64_t) -> bool`: Is the second operand an offset within a struct?
+- `is_stkvar0(F: flags64_t) -> bool`: Is the first operand a stack variable?
+- `is_stkvar1(F: flags64_t) -> bool`: Is the second operand a stack variable?
+- `is_float0(F: flags64_t) -> bool`: Is the first operand a floating point number?
+- `is_float1(F: flags64_t) -> bool`: Is the second operand a floating point number?
+- `is_custfmt0(F: flags64_t) -> bool`: Does the first operand use a custom data representation?
+- `is_custfmt1(F: flags64_t) -> bool`: Does the second operand use a custom data representation?
+- `is_numop0(F: flags64_t) -> bool`: Is the first operand a number (i.e. binary, octal, decimal or hex?)
+- `is_numop1(F: flags64_t) -> bool`: Is the second operand a number (i.e. binary, octal, decimal or hex?)
+- `get_optype_flags0(F: flags64_t) -> flags64_t`: Get flags for first operand.
+- `get_optype_flags1(F: flags64_t) -> flags64_t`: Get flags for second operand.
+- `is_defarg(F: flags64_t, n: int) -> bool`: is defined?
+- `is_off(F: flags64_t, n: int) -> bool`: is offset?
+- `is_char(F: flags64_t, n: int) -> bool`: is character constant?
+- `is_seg(F: flags64_t, n: int) -> bool`: is segment?
+- `is_enum(F: flags64_t, n: int) -> bool`: is enum?
+- `is_manual(F: flags64_t, n: int) -> bool`: is forced operand? (use is_forced_operand())
+- `is_stroff(F: flags64_t, n: int) -> bool`: is struct offset?
+- `is_stkvar(F: flags64_t, n: int) -> bool`: is stack variable?
+- `is_fltnum(F: flags64_t, n: int) -> bool`: is floating point number?
+- `is_custfmt(F: flags64_t, n: int) -> bool`: is custom data format?
+- `is_numop(F: flags64_t, n: int) -> bool`: is number (bin, oct, dec, hex)?
+- `is_suspop(ea: ida_idaapi.ea_t, F: flags64_t, n: int) -> bool`: is suspicious operand?
+- `op_adds_xrefs(F: flags64_t, n: int) -> bool`: Should processor module create xrefs from the operand?. Currently 'offset', 'structure offset', 'stack' and 'enum' operands create xrefs
+- `set_op_type(ea: ida_idaapi.ea_t, type: flags64_t, n: int) -> bool`: (internal function) change representation of operand(s).
+- `op_seg(ea: ida_idaapi.ea_t, n: int) -> bool`: Set operand representation to be 'segment'. If applied to unexplored bytes, converts them to 16/32bit word data
+- `op_enum(ea: ida_idaapi.ea_t, n: int, id: tid_t, serial: uchar = 0) -> bool`: Set operand representation to be enum type If applied to unexplored bytes, converts them to 16/32bit word data
+- `get_enum_id(ea: ida_idaapi.ea_t, n: int) -> uchar *`: Get enum id of 'enum' operand.
+- `op_based_stroff(insn: insn_t const &, n: int, opval: adiff_t, base: ida_idaapi.ea_t) -> bool`: Set operand representation to be 'struct offset' if the operand likely points to a structure member. For example, let's there is a structure at 1000 1000 stru_1000 Elf32_Sym <...> the operand #8 will be represented as '#Elf32_Sym.st_size' after the call of 'op_based_stroff(..., 8, 0x1000)' By the way, after the call of 'op_plain_offset(..., 0x1000)' it will be represented as '#(stru_1000.st_size - 0x1000)'
+- `op_stkvar(ea: ida_idaapi.ea_t, n: int) -> bool`: Set operand representation to be 'stack variable'. Should be applied to an instruction within a function. Should be applied after creating a stack var using insn_t::create_stkvar().
+- `set_forced_operand(ea: ida_idaapi.ea_t, n: int, op: str) -> bool`: Set forced operand.
+- `get_forced_operand(ea: ida_idaapi.ea_t, n: int) -> str`: Get forced operand.
+- `is_forced_operand(ea: ida_idaapi.ea_t, n: int) -> bool`: Is operand manually defined?.
+- `combine_flags(F: flags64_t) -> flags64_t`
+- `char_flag() -> flags64_t`: see FF_opbits
+- `off_flag() -> flags64_t`: see FF_opbits
+- `enum_flag() -> flags64_t`: see FF_opbits
+- `stroff_flag() -> flags64_t`: see FF_opbits
+- `stkvar_flag() -> flags64_t`: see FF_opbits
+- `flt_flag() -> flags64_t`: see FF_opbits
+- `custfmt_flag() -> flags64_t`: see FF_opbits
+- `seg_flag() -> flags64_t`: see FF_opbits
+- `num_flag() -> flags64_t`: Get number of default base (bin, oct, dec, hex)
+- `hex_flag() -> flags64_t`: Get number flag of the base, regardless of current processor - better to use num_flag()
+- `dec_flag() -> flags64_t`: Get number flag of the base, regardless of current processor - better to use num_flag()
+- `oct_flag() -> flags64_t`: Get number flag of the base, regardless of current processor - better to use num_flag()
+- `bin_flag() -> flags64_t`: Get number flag of the base, regardless of current processor - better to use num_flag()
+- `op_chr(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to char_flag()
+- `op_num(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to num_flag()
+- `op_hex(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to hex_flag()
+- `op_dec(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to dec_flag()
+- `op_oct(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to oct_flag()
+- `op_bin(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to bin_flag()
+- `op_flt(ea: ida_idaapi.ea_t, n: int) -> bool`: set op type to flt_flag()
+- `op_custfmt(ea: ida_idaapi.ea_t, n: int, fid: int) -> bool`: Set custom data format for operand (fid-custom data format id)
+- `clr_op_type(ea: ida_idaapi.ea_t, n: int) -> bool`: Remove operand representation information. (set operand representation to be 'undefined')
+- `get_default_radix() -> int`: Get default base of number for the current processor.
+- `get_radix(F: flags64_t, n: int) -> int`: Get radix of the operand, in: flags. If the operand is not a number, returns get_default_radix()
+- `code_flag() -> flags64_t`: FF_CODE
+- `byte_flag() -> flags64_t`: Get a flags64_t representing a byte.
+- `word_flag() -> flags64_t`: Get a flags64_t representing a word.
+- `dword_flag() -> flags64_t`: Get a flags64_t representing a double word.
+- `qword_flag() -> flags64_t`: Get a flags64_t representing a quad word.
+- `oword_flag() -> flags64_t`: Get a flags64_t representing a octaword.
+- `yword_flag() -> flags64_t`: Get a flags64_t representing a ymm word.
+- `zword_flag() -> flags64_t`: Get a flags64_t representing a zmm word.
+- `tbyte_flag() -> flags64_t`: Get a flags64_t representing a tbyte.
+- `strlit_flag() -> flags64_t`: Get a flags64_t representing a string literal.
+- `stru_flag() -> flags64_t`: Get a flags64_t representing a struct.
+- `cust_flag() -> flags64_t`: Get a flags64_t representing custom type data.
+- `align_flag() -> flags64_t`: Get a flags64_t representing an alignment directive.
+- `float_flag() -> flags64_t`: Get a flags64_t representing a float.
+- `double_flag() -> flags64_t`: Get a flags64_t representing a double.
+- `packreal_flag() -> flags64_t`: Get a flags64_t representing a packed decimal real.
+- `is_byte(F: flags64_t) -> bool`: FF_BYTE
+- `is_word(F: flags64_t) -> bool`: FF_WORD
+- `is_dword(F: flags64_t) -> bool`: FF_DWORD
+- `is_qword(F: flags64_t) -> bool`: FF_QWORD
+- `is_oword(F: flags64_t) -> bool`: FF_OWORD
+- `is_yword(F: flags64_t) -> bool`: FF_YWORD
+- `is_zword(F: flags64_t) -> bool`: FF_ZWORD
+- `is_tbyte(F: flags64_t) -> bool`: FF_TBYTE
+- `is_float(F: flags64_t) -> bool`: FF_FLOAT
+- `is_double(F: flags64_t) -> bool`: FF_DOUBLE
+- `is_pack_real(F: flags64_t) -> bool`: FF_PACKREAL
+- `is_strlit(F: flags64_t) -> bool`: FF_STRLIT
+- `is_struct(F: flags64_t) -> bool`: FF_STRUCT
+- `is_align(F: flags64_t) -> bool`: FF_ALIGN
+- `is_custom(F: flags64_t) -> bool`: FF_CUSTOM
+- `f_is_byte(F: flags64_t, arg2: void *) -> bool`: See is_byte()
+- `f_is_word(F: flags64_t, arg2: void *) -> bool`: See is_word()
+- `f_is_dword(F: flags64_t, arg2: void *) -> bool`: See is_dword()
+- `f_is_qword(F: flags64_t, arg2: void *) -> bool`: See is_qword()
+- `f_is_oword(F: flags64_t, arg2: void *) -> bool`: See is_oword()
+- `f_is_yword(F: flags64_t, arg2: void *) -> bool`: See is_yword()
+- `f_is_tbyte(F: flags64_t, arg2: void *) -> bool`: See is_tbyte()
+- `f_is_float(F: flags64_t, arg2: void *) -> bool`: See is_float()
+- `f_is_double(F: flags64_t, arg2: void *) -> bool`: See is_double()
+- `f_is_pack_real(F: flags64_t, arg2: void *) -> bool`: See is_pack_real()
+- `f_is_strlit(F: flags64_t, arg2: void *) -> bool`: See is_strlit()
+- `f_is_struct(F: flags64_t, arg2: void *) -> bool`: See is_struct()
+- `f_is_align(F: flags64_t, arg2: void *) -> bool`: See is_align()
+- `f_is_custom(F: flags64_t, arg2: void *) -> bool`: See is_custom()
+- `is_same_data_type(F1: flags64_t, F2: flags64_t) -> bool`: Do the given flags specify the same data type?
+- `get_flags_by_size(size: size_t) -> flags64_t`: Get flags from size (in bytes). Supported sizes: 1, 2, 4, 8, 16, 32. For other sizes returns 0
+- `create_data(ea: ida_idaapi.ea_t, dataflag: flags64_t, size: asize_t, tid: tid_t) -> bool`: Convert to data (byte, word, dword, etc). This function may be used to create arrays.
+- `calc_dflags(f: flags64_t, force: bool) -> flags64_t`
+- `create_byte(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to byte.
+- `create_word(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to word.
+- `create_dword(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to dword.
+- `create_qword(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to quadword.
+- `create_oword(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to octaword/xmm word.
+- `create_yword(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to ymm word.
+- `create_zword(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to zmm word.
+- `create_tbyte(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to tbyte.
+- `create_float(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to float.
+- `create_double(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to double.
+- `create_packed_real(ea: ida_idaapi.ea_t, length: asize_t, force: bool = False) -> bool`: Convert to packed decimal real.
+- `create_struct(ea: ida_idaapi.ea_t, length: asize_t, tid: tid_t, force: bool = False) -> bool`: Convert to struct.
+- `create_custdata(ea: ida_idaapi.ea_t, length: asize_t, dtid: int, fid: int, force: bool = False) -> bool`: Convert to custom data type.
+- `create_align(ea: ida_idaapi.ea_t, length: asize_t, alignment: int) -> bool`: Create an alignment item.
+- `calc_min_align(length: asize_t) -> int`: Calculate the minimal possible alignment exponent.
+- `calc_max_align(endea: ida_idaapi.ea_t) -> int`: Calculate the maximal possible alignment exponent.
+- `calc_def_align(ea: ida_idaapi.ea_t, mina: int, maxa: int) -> int`: Calculate the default alignment exponent.
+- `create_16bit_data(ea: ida_idaapi.ea_t, length: asize_t) -> bool`: Convert to 16-bit quantity (take the byte size into account)
+- `create_32bit_data(ea: ida_idaapi.ea_t, length: asize_t) -> bool`: Convert to 32-bit quantity (take the byte size into account)
+- `get_max_strlit_length(ea: ida_idaapi.ea_t, strtype: int, options: int = 0) -> size_t`: Determine maximum length of string literal.
+- `create_strlit(start: ida_idaapi.ea_t, len: size_t, strtype: int) -> bool`: Convert to string literal and give a meaningful name. 'start' may be higher than 'end', the kernel will swap them in this case
+- `get_opinfo(buf: opinfo_t, ea: ida_idaapi.ea_t, n: int, flags: flags64_t) -> opinfo_t *`: Get additional information about an operand representation.
+- `set_opinfo(ea: ida_idaapi.ea_t, n: int, flag: flags64_t, ti: opinfo_t, suppress_events: bool = False) -> bool`: Set additional information about an operand representation. This function is a low level one. Only the kernel should use it.
+- `get_data_elsize(ea: ida_idaapi.ea_t, F: flags64_t, ti: opinfo_t = None) -> asize_t`: Get size of data type specified in flags 'F'.
+- `get_full_data_elsize(ea: ida_idaapi.ea_t, F: flags64_t, ti: opinfo_t = None) -> asize_t`: Get full size of data type specified in flags 'F'. takes into account processors with wide bytes e.g. returns 2 for a byte element with 16-bit bytes
+- `is_varsize_item(ea: ida_idaapi.ea_t, F: flags64_t, ti: opinfo_t = None, itemsize: asize_t * = None) -> int`: Is the item at 'ea' variable size?.
+- `get_possible_item_varsize(ea: ida_idaapi.ea_t, tif: tinfo_t) -> asize_t`: Return the possible size of the item at EA of type TIF if TIF is the variable structure.
+- `can_define_item(ea: ida_idaapi.ea_t, length: asize_t, flags: flags64_t) -> bool`: Can define item (instruction/data) of the specified 'length', starting at 'ea'?
+- `has_immd(F: flags64_t) -> bool`: Has immediate value?
+- `is_func(F: flags64_t) -> bool`: Is function start?
+- `set_immd(ea: ida_idaapi.ea_t) -> bool`: Set 'has immediate operand' flag. Returns true if the FF_IMMD bit was not set and now is set
+- `get_custom_data_type(dtid: int) -> data_type_t const *`: Get definition of a registered custom data type.
+- `get_custom_data_format(dfid: int) -> data_format_t const *`: Get definition of a registered custom data format.
+- `attach_custom_data_format(dtid: int, dfid: int) -> bool`: Attach the data format to the data type.
+- `detach_custom_data_format(dtid: int, dfid: int) -> bool`: Detach the data format from the data type. Unregistering a custom data type detaches all attached data formats, no need to detach them explicitly. You still need unregister them. Unregistering a custom data format detaches it from all attached data types.
+- `is_attached_custom_data_format(dtid: int, dfid: int) -> bool`: Is the custom data format attached to the custom data type?
+- `get_custom_data_types(*args) -> int`: Get list of registered custom data type ids.
+- `get_custom_data_formats(out: intvec_t *, dtid: int) -> int`: Get list of attached custom data formats for the specified data type.
+- `find_custom_data_type(name: str) -> int`: Get id of a custom data type.
+- `find_custom_data_format(name: str) -> int`: Get id of a custom data format.
+- `set_cmt(ea: ida_idaapi.ea_t, comm: str, rptble: bool) -> bool`: Set an indented comment.
+- `get_cmt(ea: ida_idaapi.ea_t, rptble: bool) -> str`: Get an indented comment.
+- `append_cmt(ea: ida_idaapi.ea_t, str: append_cmt.str, rptble: bool) -> bool`: Append to an indented comment. Creates a new comment if none exists. Appends a newline character and the specified string otherwise.
+- `get_predef_insn_cmt(ins: insn_t const &) -> str`: Get predefined comment.
+- `find_byte(sEA: ida_idaapi.ea_t, size: asize_t, value: uchar, bin_search_flags: int) -> ida_idaapi.ea_t`: Find forward a byte with the specified value (only 8-bit value from the database). example: ea=4 size=3 will inspect addresses 4, 5, and 6
+- `find_byter(sEA: ida_idaapi.ea_t, size: asize_t, value: uchar, bin_search_flags: int) -> ida_idaapi.ea_t`: Find reverse a byte with the specified value (only 8-bit value from the database). example: ea=4 size=3 will inspect addresses 6, 5, and 4
+- `parse_binpat_str(out: compiled_binpat_vec_t, ea: ida_idaapi.ea_t, _in: str, radix: int, strlits_encoding: int = 0) -> bool`: Deprecated.
+- `bin_search(*args)`: Search for a set of bytes in the program
+- `next_inited(ea: ida_idaapi.ea_t, maxea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Find the next initialized address.
+- `prev_inited(ea: ida_idaapi.ea_t, minea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Find the previous initialized address.
+- `equal_bytes(ea: ida_idaapi.ea_t, image: uchar const *, mask: uchar const *, len: size_t, bin_search_flags: int) -> bool`: Compare 'len' bytes of the program starting from 'ea' with 'image'.
+- `update_hidden_range(ha: hidden_range_t) -> bool`: Update hidden range information in the database. You cannot use this function to change the range boundaries
+- `add_hidden_range(*args) -> bool`: Mark a range of addresses as hidden. The range will be created in the invisible state with the default color
+- `get_hidden_range(ea: ida_idaapi.ea_t) -> hidden_range_t *`: Get pointer to hidden range structure, in: linear address.
+- `getn_hidden_range(n: int) -> hidden_range_t *`: Get pointer to hidden range structure, in: number of hidden range.
+- `get_hidden_range_qty() -> int`: Get number of hidden ranges.
+- `get_hidden_range_num(ea: ida_idaapi.ea_t) -> int`: Get number of a hidden range.
+- `get_prev_hidden_range(ea: ida_idaapi.ea_t) -> hidden_range_t *`: Get pointer to previous hidden range.
+- `get_next_hidden_range(ea: ida_idaapi.ea_t) -> hidden_range_t *`: Get pointer to next hidden range.
+- `get_first_hidden_range() -> hidden_range_t *`: Get pointer to the first hidden range.
+- `get_last_hidden_range() -> hidden_range_t *`: Get pointer to the last hidden range.
+- `del_hidden_range(ea: ida_idaapi.ea_t) -> bool`: Delete hidden range.
+- `add_mapping(_from: ida_idaapi.ea_t, to: ida_idaapi.ea_t, size: asize_t) -> bool`: IDA supports memory mapping. References to the addresses from the mapped range use data and meta-data from the mapping range.
+- `del_mapping(ea: ida_idaapi.ea_t) -> None`: Delete memory mapping range.
+- `use_mapping(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t`: Translate address according to current mappings.
+- `get_mappings_qty() -> size_t`: Get number of mappings.
+- `get_mapping(n: size_t) -> ea_t *, ea_t *, asize_t *`: Get memory mapping range by its number.
+- `visit_patched_bytes(ea1: ida_idaapi.ea_t, ea2: ida_idaapi.ea_t, callable)`: Enumerates patched bytes in the given range and invokes a callable
+- `get_bytes(ea: ida_idaapi.ea_t, size: int, gmb_flags: int = GMB_READALL)`: Get the specified number of bytes of the program.
+- `get_bytes_and_mask(ea: ida_idaapi.ea_t, size: int, gmb_flags: int = GMB_READALL)`: Get the specified number of bytes of the program, and a bitmask
+- `get_strlit_contents(ea: ida_idaapi.ea_t, len: int, type: int, flags: int = 0)`: Get contents of string literal, as UTF-8-encoded codepoints.
+- `print_strlit_type(strtype: int, flags: int = 0) -> PyObject *`: Get string type information: the string type name (possibly decorated with hotkey markers), and the tooltip.
+- `op_stroff(*args) -> bool`: Set operand representation to be 'struct offset'.
+- `get_stroff_path(*args)`: Get the structure offset path for operand n, at the
+- `register_custom_data_type(dt)`: Registers a custom data type.
+- `unregister_custom_data_type(dtid)`: Unregisters a custom data type.
+- `register_custom_data_format(df)`: Registers a custom data format with a given data type.
+- `unregister_custom_data_format(dfid)`: Unregisters a custom data format
+- `register_data_types_and_formats(formats)`: Registers multiple data types and formats at once.
+- `unregister_data_types_and_formats(formats)`: As opposed to register_data_types_and_formats(), this function
+- `find_bytes(bs: bytes | bytearray | str, range_start: int, range_size: int | None = None, range_end: int | None = ida_idaapi.BADADDR, mask: bytes | bytearray | None = None, flags: int | None = BIN_SEARCH_FORWARD | BIN_SEARCH_NOSHOW, radix: int | None = 16, strlit_encoding: int | str | None = PBSENC_DEF1BPU) -> int`
+- `find_string(_str: str, range_start: int, range_end: int | None = ida_idaapi.BADADDR, range_size: int | None = None, strlit_encoding: int | str | None = PBSENC_DEF1BPU, flags: int | None = BIN_SEARCH_FORWARD | BIN_SEARCH_NOSHOW) -> int`

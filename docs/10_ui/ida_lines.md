@@ -1,0 +1,176 @@
+# ida_lines
+
+High level functions that deal with the generation of the disassembled text lines.
+
+This file also contains definitions for the syntax highlighting.
+Finally there are functions that deal with anterior/posterior user-defined lines.
+
+## Constants
+
+- `COLOR_ON`: Escape character (ON). Followed by a color code (color_t).
+- `COLOR_OFF`: Escape character (OFF). Followed by a color code (color_t).
+- `COLOR_ESC`: Escape character (Quote next character). This is needed to output '1' and '2' characters.
+- `COLOR_INV`: Escape character (Inverse foreground and background colors). This escape character has no corresponding COLOR_OFF. Its action continues until the next COLOR_INV or end of line.
+- `SCOLOR_ON`: Escape character (ON)
+- `SCOLOR_OFF`: Escape character (OFF)
+- `SCOLOR_ESC`: Escape character (Quote next character)
+- `SCOLOR_INV`: Escape character (Inverse colors)
+- `SCOLOR_DEFAULT`: Default.
+- `SCOLOR_REGCMT`: Regular comment.
+- `SCOLOR_RPTCMT`: Repeatable comment (defined not here)
+- `SCOLOR_AUTOCMT`: Automatic comment.
+- `SCOLOR_INSN`: Instruction.
+- `SCOLOR_DATNAME`: Dummy Data Name.
+- `SCOLOR_DNAME`: Regular Data Name.
+- `SCOLOR_DEMNAME`: Demangled Name.
+- `SCOLOR_SYMBOL`: Punctuation.
+- `SCOLOR_CHAR`: Char constant in instruction.
+- `SCOLOR_STRING`: String constant in instruction.
+- `SCOLOR_NUMBER`: Numeric constant in instruction.
+- `SCOLOR_VOIDOP`: Void operand.
+- `SCOLOR_CREF`: Code reference.
+- `SCOLOR_DREF`: Data reference.
+- `SCOLOR_CREFTAIL`: Code reference to tail byte.
+- `SCOLOR_DREFTAIL`: Data reference to tail byte.
+- `SCOLOR_ERROR`: Error or problem.
+- `SCOLOR_PREFIX`: Line prefix.
+- `SCOLOR_BINPREF`: Binary line prefix bytes.
+- `SCOLOR_EXTRA`: Extra line.
+- `SCOLOR_ALTOP`: Alternative operand.
+- `SCOLOR_HIDNAME`: Hidden name.
+- `SCOLOR_LIBNAME`: Library function name.
+- `SCOLOR_LOCNAME`: Local variable name.
+- `SCOLOR_CODNAME`: Dummy code name.
+- `SCOLOR_ASMDIR`: Assembler directive.
+- `SCOLOR_MACRO`: Macro.
+- `SCOLOR_DSTR`: String constant in data directive.
+- `SCOLOR_DCHAR`: Char constant in data directive.
+- `SCOLOR_DNUM`: Numeric constant in data directive.
+- `SCOLOR_KEYWORD`: Keywords.
+- `SCOLOR_REG`: Register name.
+- `SCOLOR_IMPNAME`: Imported name.
+- `SCOLOR_SEGNAME`: Segment name.
+- `SCOLOR_UNKNAME`: Dummy unknown name.
+- `SCOLOR_CNAME`: Regular code name.
+- `SCOLOR_UNAME`: Regular unknown name.
+- `SCOLOR_COLLAPSED`: Collapsed line.
+- `SCOLOR_ADDR`: Hidden address mark.
+- `COLOR_SELECTED`: Selected.
+- `COLOR_LIBFUNC`: Library function.
+- `COLOR_REGFUNC`: Regular function.
+- `COLOR_CODE`: Single instruction.
+- `COLOR_DATA`: Data bytes.
+- `COLOR_UNKNOWN`: Unexplored byte.
+- `COLOR_EXTERN`: External name definition segment.
+- `COLOR_CURITEM`: Current item.
+- `COLOR_CURLINE`: Current line.
+- `COLOR_HIDLINE`: Hidden line.
+- `COLOR_LUMFUNC`: Lumina function.
+- `COLOR_BG_MAX`: Max color number.
+- `cvar`
+- `COLOR_DEFAULT`: Default.
+- `COLOR_REGCMT`: Regular comment.
+- `COLOR_RPTCMT`: Repeatable comment (comment defined somewhere else)
+- `COLOR_AUTOCMT`: Automatic comment.
+- `COLOR_INSN`: Instruction.
+- `COLOR_DATNAME`: Dummy Data Name.
+- `COLOR_DNAME`: Regular Data Name.
+- `COLOR_DEMNAME`: Demangled Name.
+- `COLOR_SYMBOL`: Punctuation.
+- `COLOR_CHAR`: Char constant in instruction.
+- `COLOR_STRING`: String constant in instruction.
+- `COLOR_NUMBER`: Numeric constant in instruction.
+- `COLOR_VOIDOP`: Void operand.
+- `COLOR_CREF`: Code reference.
+- `COLOR_DREF`: Data reference.
+- `COLOR_CREFTAIL`: Code reference to tail byte.
+- `COLOR_DREFTAIL`: Data reference to tail byte.
+- `COLOR_ERROR`: Error or problem.
+- `COLOR_PREFIX`: Line prefix.
+- `COLOR_BINPREF`: Binary line prefix bytes.
+- `COLOR_EXTRA`: Extra line.
+- `COLOR_ALTOP`: Alternative operand.
+- `COLOR_HIDNAME`: Hidden name.
+- `COLOR_LIBNAME`: Library function name.
+- `COLOR_LOCNAME`: Local variable name.
+- `COLOR_CODNAME`: Dummy code name.
+- `COLOR_ASMDIR`: Assembler directive.
+- `COLOR_MACRO`: Macro.
+- `COLOR_DSTR`: String constant in data directive.
+- `COLOR_DCHAR`: Char constant in data directive.
+- `COLOR_DNUM`: Numeric constant in data directive.
+- `COLOR_KEYWORD`: Keywords.
+- `COLOR_REG`: Register name.
+- `COLOR_IMPNAME`: Imported name.
+- `COLOR_SEGNAME`: Segment name.
+- `COLOR_UNKNAME`: Dummy unknown name.
+- `COLOR_CNAME`: Regular code name.
+- `COLOR_UNAME`: Regular unknown name.
+- `COLOR_COLLAPSED`: Collapsed line.
+- `COLOR_FG_MAX`: Max color number.
+- `COLOR_ADDR`: Hidden address marks. the address is represented as 16-digit hex number: 01234567ABCDEF00. it doesn't have the COLOR_OFF pair.
+- `COLOR_OPND1`: Instruction operand 1.
+- `COLOR_OPND2`: Instruction operand 2.
+- `COLOR_OPND3`: Instruction operand 3.
+- `COLOR_OPND4`: Instruction operand 4.
+- `COLOR_OPND5`: Instruction operand 5.
+- `COLOR_OPND6`: Instruction operand 6.
+- `COLOR_OPND7`: Instruction operand 7.
+- `COLOR_OPND8`: Instruction operand 8.
+- `COLOR_RESERVED1`: This tag is reserved for internal IDA use.
+- `COLOR_LUMINA`: Lumina-related, only for the navigation band.
+- `VEL_POST`: append posterior line
+- `VEL_CMT`: append comment line
+- `GDISMF_AS_STACK`
+- `GDISMF_ADDR_TAG`
+- `GDISMF_REMOVE_TAGS`
+- `GDISMF_UNHIDE`
+- `GENDSM_FORCE_CODE`
+- `GENDSM_MULTI_LINE`
+- `GENDSM_REMOVE_TAGS`
+- `GENDSM_UNHIDE`
+- `COLOR_ADDR_SIZE`: Size of a tagged address (see COLOR_ADDR)
+- `SCOLOR_FG_MAX`
+- `cvar`
+- `SCOLOR_OPND1`
+- `SCOLOR_OPND2`
+- `SCOLOR_OPND3`
+- `SCOLOR_OPND4`
+- `SCOLOR_OPND5`
+- `SCOLOR_OPND6`
+- `SCOLOR_UTF8`
+- `PALETTE_SIZE`
+- `E_PREV`
+- `E_NEXT`
+
+## Classes Overview
+
+- `user_defined_prefix_t`
+
+## Functions Overview
+
+- `tag_strlen(line: str) -> ssize_t`: Calculate length of a colored string This function computes the length in unicode codepoints of a line
+- `calc_prefix_color(ea: ida_idaapi.ea_t) -> color_t`: Get prefix color for line at 'ea'
+- `calc_bg_color(ea: ida_idaapi.ea_t) -> bgcolor_t`: Get background color for line at 'ea'
+- `add_sourcefile(ea1: ida_idaapi.ea_t, ea2: ida_idaapi.ea_t, filename: str) -> bool`
+- `get_sourcefile(ea: ida_idaapi.ea_t, bounds: range_t = None) -> str`
+- `del_sourcefile(ea: ida_idaapi.ea_t) -> bool`
+- `install_user_defined_prefix(*args) -> bool`
+- `add_extra_line(*args) -> bool`
+- `add_extra_cmt(*args) -> bool`
+- `add_pgm_cmt(*args) -> bool`
+- `generate_disasm_line(ea: ida_idaapi.ea_t, flags: int = 0) -> str`
+- `get_first_free_extra_cmtidx(ea: ida_idaapi.ea_t, start: int) -> int`
+- `update_extra_cmt(ea: ida_idaapi.ea_t, what: int, str: update_extra_cmt.str) -> bool`
+- `del_extra_cmt(ea: ida_idaapi.ea_t, what: int) -> bool`
+- `get_extra_cmt(ea: ida_idaapi.ea_t, what: int) -> int`
+- `delete_extra_cmts(ea: ida_idaapi.ea_t, what: int) -> None`
+- `create_encoding_helper(*args) -> encoder_t *`
+- `tag_remove(nonnul_instr: str) -> str`: Remove color escape sequences from a string.
+- `tag_addr(ea: ida_idaapi.ea_t) -> str`: Insert an address mark into a string.
+- `tag_skipcode(line: str) -> int`: Skip one color code. This function should be used if you are interested in color codes and want to analyze all of them. Otherwise tag_skipcodes() function is better since it will skip all colors at once. This function will skip the current color code if there is one. If the current symbol is not a color code, it will return the input.
+- `tag_skipcodes(line: str) -> int`: Move the pointer past all color codes.
+- `tag_advance(line: str, cnt: int) -> int`: Move pointer to a 'line' to 'cnt' positions right. Take into account escape sequences.
+- `generate_disassembly(ea, max_lines, as_stack, notag, include_hidden: Boolean = False)`: Generate disassembly lines (many lines) and put them into a buffer
+- `requires_color_esc(c)`: Is the given char a color escape character?
+- `COLSTR(str, tag)`: Utility function to create a colored line

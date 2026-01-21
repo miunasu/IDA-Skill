@@ -1,0 +1,14 @@
+# IDA Skill Requirements
+# Python 库依赖
+
+# AI 辅助分析 (reai.py)
+openai>=1.0.0
+
+# YARA 规则生成 (mkyara.py) - 可选
+# 如果不安装，mkyara.py 会使用内置的简单实现
+mkyara>=1.0.0
+capstone>=5.0.0
+
+# 注意：
+# - idaapi, idc, idautils 等 IDA 相关模块由 IDA Pro 提供，无需安装
+# - 其他工具 (findcrypt.py, dump.py, export_check.py) 仅使用标准库和 IDA 模块

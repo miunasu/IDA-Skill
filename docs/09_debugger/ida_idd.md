@@ -1,0 +1,244 @@
+# ida_idd
+
+Contains definition of the interface to IDD modules.
+
+The interface consists of structures describing the target debugged processor and a debugging API.
+
+## Constants
+
+- `IDD_INTERFACE_VERSION`: The IDD interface version number.
+- `NO_THREAD`: No thread. in PROCESS_STARTED this value can be used to specify that the main thread has not been created. It will be initialized later by a THREAD_STARTED event.
+- `DEF_ADDRSIZE`
+- `REGISTER_READONLY`: the user can't modify the current value of this register
+- `REGISTER_IP`: instruction pointer
+- `REGISTER_SP`: stack pointer
+- `REGISTER_FP`: frame pointer
+- `REGISTER_ADDRESS`: may contain an address
+- `REGISTER_CS`: code segment
+- `REGISTER_SS`: stack segment
+- `REGISTER_NOLF`: displays this register without returning to the next line, allowing the next register to be displayed to its right (on the same line)
+- `REGISTER_CUSTFMT`: register should be displayed using a custom data format. the format name is in bit_strings[0]; the corresponding regval_t will use bytevec_t
+- `NO_EVENT`: Not an interesting event. This event can be used if the debugger module needs to return an event but there are no valid events.
+- `PROCESS_STARTED`: New process has been started.
+- `PROCESS_EXITED`: Process has been stopped.
+- `THREAD_STARTED`: New thread has been started.
+- `THREAD_EXITED`: Thread has been stopped.
+- `BREAKPOINT`: Breakpoint has been reached. IDA will complain about unknown breakpoints, they should be reported as exceptions.
+- `STEP`: One instruction has been executed. Spurious events of this kind are silently ignored by IDA.
+- `EXCEPTION`: Exception.
+- `LIB_LOADED`: New library has been loaded.
+- `LIB_UNLOADED`: Library has been unloaded.
+- `INFORMATION`: User-defined information. This event can be used to return empty information This will cause IDA to call get_debug_event() immediately once more.
+- `PROCESS_ATTACHED`: Successfully attached to running process.
+- `PROCESS_DETACHED`: Successfully detached from process.
+- `PROCESS_SUSPENDED`: Process has been suspended. This event can be used by the debugger module to signal if the process spontaneously gets suspended (not because of an exception, breakpoint, or single step). IDA will silently switch to the 'suspended process' mode without displaying any messages.
+- `TRACE_FULL`: The trace buffer of the tracer module is full and IDA needs to read it before continuing
+- `STATUS_MASK`: additional info about process state
+- `BITNESS_CHANGED`: Debugger detected the process bitness changing.
+- `cvar`
+- `BPT_WRITE`: Write access.
+- `BPT_READ`: Read access.
+- `BPT_RDWR`: Read/write access.
+- `BPT_SOFT`: Software breakpoint.
+- `BPT_EXEC`: Execute instruction.
+- `BPT_DEFAULT`: Choose bpt type automatically.
+- `EXC_BREAK`: break on the exception
+- `EXC_HANDLE`: should be handled by the debugger?
+- `EXC_MSG`: instead of a warning, log the exception to the output window
+- `EXC_SILENT`: do not warn or log to the output window
+- `RVT_FLOAT`: floating point
+- `RVT_INT`: integer
+- `RVT_UNAVAILABLE`: unavailable; other values mean custom data type
+- `RESMOD_NONE`: no stepping, run freely
+- `RESMOD_INTO`: step into call (the most typical single stepping)
+- `RESMOD_OVER`: step over call
+- `RESMOD_OUT`: step out of the current function (run until return)
+- `RESMOD_SRCINTO`: until control reaches a different source line
+- `RESMOD_SRCOVER`: next source line in the current stack frame
+- `RESMOD_SRCOUT`: next source line in the previous stack frame
+- `RESMOD_USER`: step out to the user code
+- `RESMOD_HANDLE`: step into the exception handler
+- `RESMOD_BACKINTO`: step backwards into call (in time-travel debugging)
+- `RESMOD_MAX`
+- `STEP_TRACE`: lowest level trace. trace buffers are not maintained
+- `INSN_TRACE`: instruction tracing
+- `FUNC_TRACE`: function tracing
+- `BBLK_TRACE`: basic block tracing
+- `DRC_EVENTS`: success, there are pending events
+- `DRC_CRC`: success, but the input file crc does not match
+- `DRC_OK`: success
+- `DRC_NONE`: reaction to the event not implemented
+- `DRC_FAILED`: failed or false
+- `DRC_NETERR`: network error
+- `DRC_NOFILE`: file not found
+- `DRC_IDBSEG`: use idb segmentation
+- `DRC_NOPROC`: the process does not exist anymore
+- `DRC_NOCHG`: no changes
+- `DRC_ERROR`: unclassified error, may be complemented by errbuf
+- `DEBUGGER_ID_X86_IA32_WIN32_USER`: Userland win32 processes (win32 debugging APIs)
+- `DEBUGGER_ID_X86_IA32_LINUX_USER`: Userland linux processes (ptrace())
+- `DEBUGGER_ID_X86_IA32_MACOSX_USER`: Userland MAC OS X processes.
+- `DEBUGGER_ID_ARM_IPHONE_USER`: iPhone 1.x
+- `DEBUGGER_ID_X86_IA32_BOCHS`: BochsDbg.exe 32.
+- `DEBUGGER_ID_6811_EMULATOR`: MC6812 emulator (beta)
+- `DEBUGGER_ID_GDB_USER`: GDB remote.
+- `DEBUGGER_ID_WINDBG`: WinDBG using Microsoft Debug engine.
+- `DEBUGGER_ID_X86_DOSBOX_EMULATOR`: Dosbox MS-DOS emulator.
+- `DEBUGGER_ID_ARM_LINUX_USER`: Userland arm linux.
+- `DEBUGGER_ID_TRACE_REPLAYER`: Fake debugger to replay recorded traces.
+- `DEBUGGER_ID_X86_PIN_TRACER`: PIN Tracer module.
+- `DEBUGGER_ID_DALVIK_USER`: Dalvik.
+- `DEBUGGER_ID_XNU_USER`: XNU Kernel.
+- `DEBUGGER_ID_ARM_MACOS_USER`: Userland arm MAC OS.
+- `DBG_FLAG_REMOTE`: Remote debugger (requires remote host name unless DBG_FLAG_NOHOST)
+- `DBG_FLAG_NOHOST`: Remote debugger with does not require network params (host/port/pass). (a unique device connected to the machine)
+- `DBG_FLAG_FAKE_ATTACH`: PROCESS_ATTACHED is a fake event and does not suspend the execution
+- `DBG_FLAG_HWDATBPT_ONE`: Hardware data breakpoints are one byte size by default
+- `DBG_FLAG_CAN_CONT_BPT`: Debugger knows to continue from a bpt. This flag also means that the debugger module hides breakpoints from ida upon read_memory
+- `DBG_FLAG_NEEDPORT`: Remote debugger requires port number (to be used with DBG_FLAG_NOHOST)
+- `DBG_FLAG_DONT_DISTURB`: Debugger can handle only get_debug_event(), request_pause(), exit_process() when the debugged process is running. The kernel may also call service functions (file I/O, map_address, etc)
+- `DBG_FLAG_SAFE`: The debugger is safe (probably because it just emulates the application without really running it)
+- `DBG_FLAG_CLEAN_EXIT`: IDA must suspend the application and remove all breakpoints before terminating the application. Usually this is not required because the application memory disappears upon termination.
+- `DBG_FLAG_USE_SREGS`: Take segment register values into account (non flat memory)
+- `DBG_FLAG_NOSTARTDIR`: Debugger module doesn't use startup directory.
+- `DBG_FLAG_NOPARAMETERS`: Debugger module doesn't use commandline parameters.
+- `DBG_FLAG_NOPASSWORD`: Remote debugger doesn't use password.
+- `DBG_FLAG_CONNSTRING`: Display "Connection string" instead of "Hostname" and hide the "Port" field.
+- `DBG_FLAG_SMALLBLKS`: If set, IDA uses 256-byte blocks for caching memory contents. Otherwise, 1024-byte blocks are used
+- `DBG_FLAG_MANMEMINFO`: If set, manual memory region manipulation commands will be available. Use this bit for debugger modules that cannot return memory layout information
+- `DBG_FLAG_EXITSHOTOK`: IDA may take a memory snapshot at PROCESS_EXITED event.
+- `DBG_FLAG_VIRTHREADS`: Thread IDs may be shuffled after each debug event. (to be used for virtual threads that represent cpus for windbg kmode)
+- `DBG_FLAG_LOWCNDS`: Low level breakpoint conditions are supported.
+- `DBG_FLAG_DEBTHREAD`: Supports creation of a separate thread in ida for the debugger (the debthread). Most debugger functions will be called from debthread (exceptions are marked below) The debugger module may directly call only THREAD_SAFE functions. To call other functions please use execute_sync(). The debthread significantly increases debugging speed, especially if debug events occur frequently.
+- `DBG_FLAG_DEBUG_DLL`: Can debug standalone DLLs. For example, Bochs debugger can debug any snippet of code
+- `DBG_FLAG_FAKE_MEMORY`: get_memory_info()/read_memory()/write_memory() work with the idb. (there is no real process to read from, as for the replayer module) the kernel will not call these functions if this flag is set. however, third party plugins may call them, they must be implemented.
+- `DBG_FLAG_ANYSIZE_HWBPT`: The debugger supports arbitrary size hardware breakpoints.
+- `DBG_FLAG_TRACER_MODULE`: The module is a tracer, not a full featured debugger module.
+- `DBG_FLAG_PREFER_SWBPTS`: Prefer to use software breakpoints.
+- `DBG_FLAG_LAZY_WATCHPTS`: Watchpoints are triggered before the offending instruction is executed. The debugger must temporarily disable the watchpoint and single-step before resuming.
+- `DBG_FLAG_FAST_STEP`: Do not refresh memory layout info after single stepping.
+- `DBG_FLAG_ADD_ENVS`: The debugger supports launching processes with environment variables.
+- `DBG_FLAG_MERGE_ENVS`: The debugger supports merge or replace setting for environment variables (only makes sense if DBG_FLAG_ADD_ENVS is set)
+- `DBG_FLAG_DISABLE_ASLR`: The debugger support ASLR disabling (Address space layout randomization)
+- `DBG_FLAG_TTD`: The debugger is a time travel debugger and supports continuing backwards.
+- `DBG_FLAG_FULL_INSTR_BPT`: Setting a breakpoint in the middle of an instruction will also break.
+- `DBG_HAS_GET_PROCESSES`: supports ev_get_processes
+- `DBG_HAS_ATTACH_PROCESS`: supports ev_attach_process
+- `DBG_HAS_DETACH_PROCESS`: supports ev_detach_process
+- `DBG_HAS_REQUEST_PAUSE`: supports ev_request_pause
+- `DBG_HAS_SET_EXCEPTION_INFO`: supports ev_set_exception_info
+- `DBG_HAS_THREAD_SUSPEND`: supports ev_thread_suspend
+- `DBG_HAS_THREAD_CONTINUE`: supports ev_thread_continue
+- `DBG_HAS_SET_RESUME_MODE`: supports ev_set_resume_mode. Cannot be set inside the debugger_t::init_debugger()
+- `DBG_HAS_THREAD_GET_SREG_BASE`: supports ev_thread_get_sreg_base
+- `DBG_HAS_CHECK_BPT`: supports ev_check_bpt
+- `DBG_HAS_OPEN_FILE`: supports ev_open_file, ev_close_file, ev_read_file, ev_write_file
+- `DBG_HAS_UPDATE_CALL_STACK`: supports ev_update_call_stack
+- `DBG_HAS_APPCALL`: supports ev_appcall, ev_cleanup_appcall
+- `DBG_HAS_REXEC`: supports ev_rexec
+- `DBG_HAS_MAP_ADDRESS`: supports ev_map_address. Avoid using this bit, especially together with DBG_FLAG_DEBTHREAD because it may cause big slow downs
+- `DBG_RESMOD_STEP_INTO`: RESMOD_INTO is available
+- `DBG_RESMOD_STEP_OVER`: RESMOD_OVER is available
+- `DBG_RESMOD_STEP_OUT`: RESMOD_OUT is available
+- `DBG_RESMOD_STEP_SRCINTO`: RESMOD_SRCINTO is available
+- `DBG_RESMOD_STEP_SRCOVER`: RESMOD_SRCOVER is available
+- `DBG_RESMOD_STEP_SRCOUT`: RESMOD_SRCOUT is available
+- `DBG_RESMOD_STEP_USER`: RESMOD_USER is available
+- `DBG_RESMOD_STEP_HANDLE`: RESMOD_HANDLE is available
+- `DBG_RESMOD_STEP_BACKINTO`: RESMOD_BACKINTO is available
+- `DBG_PROC_IS_DLL`: database contains a dll (not exe)
+- `DBG_PROC_IS_GUI`: using gui version of ida
+- `DBG_PROC_32BIT`: application is 32-bit
+- `DBG_PROC_64BIT`: application is 64-bit
+- `DBG_NO_TRACE`: do not trace the application (mac/linux)
+- `DBG_HIDE_WINDOW`: application should be hidden on startup (windows)
+- `DBG_SUSPENDED`: application should be suspended on startup (mac)
+- `DBG_NO_ASLR`: disable ASLR (linux)
+- `BPT_OK`: breakpoint can be set
+- `BPT_INTERNAL_ERR`: interr occurred when verifying breakpoint
+- `BPT_BAD_TYPE`: bpt type is not supported
+- `BPT_BAD_ALIGN`: alignment is invalid
+- `BPT_BAD_ADDR`: ea is invalid
+- `BPT_BAD_LEN`: bpt len is invalid
+- `BPT_TOO_MANY`: reached max number of supported breakpoints
+- `BPT_READ_ERROR`: failed to read memory at bpt ea
+- `BPT_WRITE_ERROR`: failed to write memory at bpt ea
+- `BPT_SKIP`: update_bpts(): do not process bpt
+- `BPT_PAGE_OK`: update_bpts(): ok, added a page bpt
+- `APPCALL_MANUAL`: Only set up the appcall, do not run. debugger_t::cleanup_appcall will not be generated by ida!
+- `APPCALL_DEBEV`: Return debug event information.
+- `APPCALL_TIMEOUT`: Appcall with timeout. If timed out, errbuf will contain "timeout". See SET_APPCALL_TIMEOUT and GET_APPCALL_TIMEOUT
+- `RQ_MASKING`: masking step handler: unless errors, tmpbpt handlers won't be generated should be used only with request_internal_step()
+- `RQ_SUSPEND`: suspending step handler: suspends the app handle_debug_event: suspends the app
+- `RQ_NOSUSP`: running step handler: continues the app
+- `RQ_IGNWERR`: ignore breakpoint write failures
+- `RQ_SILENT`: all: no dialog boxes
+- `RQ_VERBOSE`: all: display dialog boxes
+- `RQ_SWSCREEN`: handle_debug_event: switch screens
+- `RQ__NOTHRRF`: handle_debug_event: do not refresh threads
+- `RQ_PROCEXIT`: snapshots: the process is exiting
+- `RQ_IDAIDLE`: handle_debug_event: ida is idle
+- `RQ_SUSPRUN`: handle_debug_event: suspend at PROCESS_STARTED
+- `RQ_RESUME`: handle_debug_event: resume application
+- `RQ_RESMOD`: resume_mode_t
+- `RQ_RESMOD_SHIFT`
+- `NO_PROCESS`: No process.
+- `NO_THREAD`: No thread. in PROCESS_STARTED this value can be used to specify that the main thread has not been created. It will be initialized later by a THREAD_STARTED event.
+- `dbg_can_query`
+- `Appcall`
+
+## Classes Overview
+
+- `excvec_t`
+- `procinfo_vec_t`
+- `call_stack_info_vec_t`
+- `meminfo_vec_template_t`
+- `regvals_t`
+- `process_info_t`
+- `debapp_attrs_t`
+- `register_info_t`
+- `memory_info_t`
+- `meminfo_vec_t`
+- `scattered_segm_t`
+- `launch_env_t`
+- `modinfo_t`
+- `bptaddr_t`
+- `excinfo_t`
+- `debug_event_t`
+- `exception_info_t`
+- `regval_t`
+- `call_stack_info_t`
+- `call_stack_t`
+- `thread_name_t`
+- `debugger_t`
+- `dyn_register_info_array`
+- `Appcall_array__`: This class is used with Appcall.array() method
+- `Appcall_callable__`: Helper class to issue appcalls using a natural syntax:
+- `Appcall_consts__`: Helper class used by Appcall.Consts attribute
+- `Appcall__`
+
+## Functions Overview
+
+- `set_debug_event_code(ev: debug_event_t, id: event_id_t) -> None`
+- `get_debug_event_name(dev: debug_event_t) -> str`: get debug event name
+- `dbg_appcall(retval: idc_value_t *, func_ea: ida_idaapi.ea_t, tid: thid_t, ptif: tinfo_t, argv: idc_value_t *, argnum: size_t) -> error_t`: Call a function from the debugged application.
+- `cleanup_appcall(tid: thid_t) -> error_t`: Cleanup after manual appcall.
+- `cpu2ieee(ieee_out: fpvalue_t *, cpu_fpval: void const *, size: int) -> int`: Convert a floating point number in CPU native format to IDA's internal format.
+- `ieee2cpu(cpu_fpval_out: void *, ieee: fpvalue_t const &, size: int) -> int`: Convert a floating point number in IDA's internal format to CPU native format.
+- `get_dbg() -> debugger_t *`
+- `dbg_get_registers()`: This function returns the register definition from the currently loaded debugger.
+- `dbg_get_thread_sreg_base(tid, sreg_value)`: Returns the segment register base value
+- `dbg_read_memory(ea, sz)`: Reads from the debugee's memory at the specified ea
+- `dbg_write_memory(ea, buffer)`: Writes a buffer to the debugee's memory
+- `dbg_get_name()`: This function returns the current debugger's name.
+- `dbg_get_memory_info()`: This function returns the memory configuration of a debugged process.
+- `appcall(func_ea: ida_idaapi.ea_t, tid: thid_t, _type_or_none: bytevec_t const &, _fields: bytevec_t const &, arg_list: PyObject *) -> PyObject *`
+- `get_event_module_name(ev: debug_event_t) -> str`
+- `get_event_module_base(ev: debug_event_t) -> ida_idaapi.ea_t`
+- `get_event_module_size(ev: debug_event_t) -> asize_t`
+- `get_event_exc_info(ev: debug_event_t) -> str`
+- `get_event_info(ev: debug_event_t) -> str`
+- `get_event_bpt_hea(ev: debug_event_t) -> ida_idaapi.ea_t`
+- `get_event_exc_code(ev: debug_event_t) -> uint`
+- `get_event_exc_ea(ev: debug_event_t) -> ida_idaapi.ea_t`
+- `can_exc_continue(ev: debug_event_t) -> bool`

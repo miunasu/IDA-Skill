@@ -1,0 +1,173 @@
+# ida_graph
+
+Graph view management.
+
+## Constants
+
+- `NIF_BG_COLOR`: node_info_t::bg_color
+- `NIF_FRAME_COLOR`: node_info_t::frame_color
+- `NIF_EA`: node_info_t::ea
+- `NIF_TEXT`: node_info_t::text
+- `NIF_FLAGS`: node_info_t::flags
+- `NIF_ALL`
+- `GLICTL_CENTER`: the gli should be set/get as center
+- `NIFF_SHOW_CONTENTS`
+- `cvar`
+- `layout_none`
+- `layout_digraph`
+- `layout_tree`
+- `layout_circle`
+- `layout_polar_tree`
+- `layout_orthogonal`
+- `layout_radial_tree`
+- `git_none`: nothing
+- `git_edge`: edge (graph_item_t::e, graph_item_t::n. n is farthest edge endpoint)
+- `git_node`: node title (graph_item_t::n)
+- `git_tool`: node title button (graph_item_t::n, graph_item_t::b)
+- `git_text`: node text (graph_item_t::n, graph_item_t::p)
+- `git_elp`: edge layout point (graph_item_t::elp)
+- `ygap`
+- `xgap`
+- `arrow_height`
+- `arrow_width`
+- `MTG_GROUP_NODE`: is group node?
+- `MTG_DOT_NODE`: is dot node?
+- `MTG_NON_DISPLAYABLE_NODE`: for disassembly graphs - non-displayable nodes have a visible area that is too large to generate disassembly lines for without IDA slowing down significantly (see MAX_VISIBLE_NODE_AREA)
+- `COLLAPSED_NODE`
+- `grcode_calculating_layout`: calculating user-defined graph layout.
+- `grcode_layout_calculated`: graph layout calculated.
+- `grcode_changed_graph`: new graph has been set.
+- `grcode_reserved`
+- `grcode_clicked`: graph is being clicked. this callback allows you to ignore some clicks. it occurs too early, internal graph variables are not updated yet. current_item1, current_item2 point to the same thing. item2 has more information. see also: custom_viewer_click_t
+- `grcode_dblclicked`: a graph node has been double clicked.
+- `grcode_creating_group`: a group is being created. this provides an opportunity for the graph to forbid creation of the group. Note that groups management is done by the interactive_graph_t instance itself: there is no need to modify the graph in this callback.
+- `grcode_deleting_group`: a group is being deleted. this provides an opportunity for the graph to forbid deletion of the group. Note that groups management is done by the interactive_graph_t instance itself: there is no need to modify the graph in this callback.
+- `grcode_group_visibility`: a group is being collapsed/uncollapsed this provides an opportunity for the graph to forbid changing the visibility of the group. Note that groups management is done by the interactive_graph_t instance itself: there is no need to modify the graph in this callback.
+- `grcode_gotfocus`: a graph viewer got focus.
+- `grcode_lostfocus`: a graph viewer lost focus.
+- `grcode_user_refresh`: refresh user-defined graph nodes and edges This is called when the UI considers that it is necessary to recreate the graph layout, and thus has to ensure that the 'interactive_graph_t' instance it is using, is up-to-date. For example:
+- `grcode_reserved2`
+- `grcode_user_text`: retrieve text for user-defined graph node. NB: do not use anything calling GDI!
+- `grcode_user_size`: calculate node size for user-defined graph.
+- `grcode_user_title`: render node title of a user-defined graph.
+- `grcode_user_draw`: render node of a user-defined graph. NB: draw only on the specified DC and nowhere else!
+- `grcode_user_hint`: retrieve hint for the user-defined graph.
+- `grcode_destroyed`: graph is being destroyed. Note that this doesn't mean the graph viewer is being destroyed; this only means that the graph that is being displayed by it is being destroyed, and that, e.g., any possibly cached data should be invalidated (this event can happen when, for example, the user decides to group nodes together: that operation will effectively create a new graph, that will replace the old one.) To be notified when the graph viewer itself is being destroyed, please see notification 'view_close', in kernwin.hpp
+- `grcode_create_graph_viewer`: use create_graph_viewer()
+- `grcode_get_graph_viewer`: use get_graph_viewer()
+- `grcode_get_viewer_graph`: use get_viewer_graph()
+- `grcode_create_interactive_graph`: use create_interactive_graph()
+- `grcode_set_viewer_graph`: use set_viewer_graph()
+- `grcode_refresh_viewer`: use refresh_viewer()
+- `grcode_fit_window`: use viewer_fit_window()
+- `grcode_get_curnode`: use viewer_get_curnode()
+- `grcode_center_on`: use viewer_center_on()
+- `grcode_get_selection`: use viewer_get_selection()
+- `grcode_del_custom_layout`: use interactive_graph_t::del_custom_layout()
+- `grcode_set_custom_layout`: use interactive_graph_t::set_custom_layout()
+- `grcode_set_graph_groups`: use interactive_graph_t::set_graph_groups()
+- `grcode_clear`: use interactive_graph_t::clear()
+- `grcode_create_digraph_layout`: use interactive_graph_t::create_digraph_layout()
+- `grcode_create_tree_layout`: use drawable_graph_t::create_tree_layout()
+- `grcode_create_circle_layout`: use drawable_graph_t::create_circle_layout()
+- `grcode_get_node_representative`: use interactive_graph_t::get_node_representative()
+- `grcode_find_subgraph_node`: use interactive_graph_t::_find_subgraph_node()
+- `grcode_create_group`: use interactive_graph_t::create_group()
+- `grcode_get_custom_layout`: use interactive_graph_t::get_custom_layout()
+- `grcode_get_graph_groups`: use interactive_graph_t::get_graph_groups()
+- `grcode_empty`: use interactive_graph_t::empty()
+- `grcode_is_visible_node`: use interactive_graph_t::is_visible_node()
+- `grcode_delete_group`: use interactive_graph_t::delete_group()
+- `grcode_change_group_visibility`: use interactive_graph_t::change_group_visibility()
+- `grcode_set_edge`: use interactive_graph_t::set_edge()
+- `grcode_node_qty`: use interactive_graph_t::node_qty()
+- `grcode_nrect`: use interactive_graph_t::nrect()
+- `grcode_set_titlebar_height`: use viewer_set_titlebar_height()
+- `grcode_create_user_graph_place`: use create_user_graph_place()
+- `grcode_create_disasm_graph1`: use create_disasm_graph(ea_t ea)
+- `grcode_create_disasm_graph2`: use create_disasm_graph(const rangevec_t &ranges)
+- `grcode_set_node_info`: use viewer_set_node_info()
+- `grcode_get_node_info`: use viewer_get_node_info()
+- `grcode_del_node_info`: use viewer_del_node_info()
+- `grcode_viewer_create_groups`
+- `grcode_viewer_delete_groups`
+- `grcode_viewer_groups_visibility`
+- `grcode_viewer_create_groups_vec`: use viewer_create_groups()
+- `grcode_viewer_delete_groups_vec`: use viewer_delete_groups()
+- `grcode_viewer_groups_visibility_vec`: use viewer_set_groups_visibility()
+- `grcode_delete_interactive_graph`: use delete_interactive_graph()
+- `grcode_edge_infos_wrapper_copy`: use edge_infos_wrapper_t::operator=()
+- `grcode_edge_infos_wrapper_clear`: use edge_infos_wrapper_t::clear()
+- `grcode_attach_menu_item`
+- `grcode_set_gli`: use viewer_set_gli()
+- `grcode_get_gli`: use viewer_get_gli()
+- `edge_t`
+- `node_ordering_t`
+- `abstract_graph_t`
+- `mutable_graph_t`
+- `create_mutable_graph`
+- `delete_mutable_graph`
+- `grcode_create_mutable_graph`
+- `grcode_create_mutable_graph`
+
+## Classes Overview
+
+- `screen_graph_selection_base_t`
+- `node_layout_t`
+- `pointvec_t`
+- `node_info_t`
+- `graph_node_visitor_t`
+- `graph_path_visitor_t`
+- `point_t`
+- `pointseq_t`
+- `rect_t`
+- `TPointDouble`
+- `edge_info_t`
+- `edge_layout_point_t`
+- `selection_item_t`
+- `screen_graph_selection_t`
+- `edge_segment_t`
+- `graph_item_t`
+- `interval_t`
+- `row_info_t`
+- `drawable_graph_t`
+- `edge_infos_wrapper_t`
+- `interactive_graph_t`
+- `graph_visitor_t`
+- `group_crinfo_t`
+- `user_graph_place_t`
+- `GraphViewer`
+
+## Functions Overview
+
+- `get_node_info(out: node_info_t, gid: graph_id_t, node: int) -> bool`: Get node info.
+- `set_node_info(gid: graph_id_t, node: int, ni: node_info_t, flags: int) -> None`: Set node info.
+- `del_node_info(gid: graph_id_t, node: int) -> None`: Delete the node_info_t for the given node.
+- `clr_node_info(gid: graph_id_t, node: int, flags: int) -> None`: Clear node info for the given node.
+- `calc_dist(p: point_t, q: point_t) -> double`: Calculate distance between p and q.
+- `create_graph_viewer(title: str, id: int, callback: hook_cb_t *, ud: void *, title_height: int, parent: TWidget * = None) -> graph_viewer_t *`: Create a custom graph viewer.
+- `get_graph_viewer(parent: TWidget *) -> graph_viewer_t *`: Get custom graph viewer for given form.
+- `create_interactive_graph(id: int) -> interactive_graph_t *`: Create a new empty graph with given id.
+- `create_disasm_graph(*args) -> interactive_graph_t *`: This function has the following signatures:
+- `get_viewer_graph(gv: graph_viewer_t *) -> interactive_graph_t *`: Get graph object for given custom graph viewer.
+- `set_viewer_graph(gv: graph_viewer_t *, g: interactive_graph_t) -> None`: Set the underlying graph object for the given viewer.
+- `refresh_viewer(gv: graph_viewer_t *) -> None`: Redraw the graph in the given view.
+- `viewer_fit_window(gv: graph_viewer_t *) -> None`: Fit graph viewer to its parent form.
+- `viewer_get_curnode(gv: graph_viewer_t *) -> int`: Get number of currently selected node (-1 if none)
+- `viewer_center_on(gv: graph_viewer_t *, node: int) -> None`: Center the graph view on the given node.
+- `viewer_set_gli(gv: graph_viewer_t *, gli: graph_location_info_t const *, flags: int = 0) -> None`: Set location info for given graph view If flags contains GLICTL_CENTER, then the gli will be set to be the center of the view. Otherwise it will be the top-left.
+- `viewer_get_gli(out: graph_location_info_t *, gv: graph_viewer_t *, flags: int = 0) -> bool`: Get location info for given graph view If flags contains GLICTL_CENTER, then the gli that will be retrieved, will be the one at the center of the view. Otherwise it will be the top-left.
+- `viewer_set_node_info(gv: graph_viewer_t *, n: int, ni: node_info_t, flags: int) -> None`: Set node info for node in given viewer (see set_node_info())
+- `viewer_get_node_info(gv: graph_viewer_t *, out: node_info_t, n: int) -> bool`: Get node info for node in given viewer (see get_node_info())
+- `viewer_del_node_info(gv: graph_viewer_t *, n: int) -> None`: Delete node info for node in given viewer (see del_node_info())
+- `viewer_create_groups(gv: graph_viewer_t *, out_group_nodes: intvec_t *, gi: groups_crinfos_t const &) -> bool`: This will perform an operation similar to what happens when a user manually selects a set of nodes, right-clicks and selects "Create group". This is a wrapper around interactive_graph_t::create_group that will, in essence:
+- `viewer_delete_groups(gv: graph_viewer_t *, groups: intvec_t const &, new_current: int = -1) -> bool`: Wrapper around interactive_graph_t::delete_group. This function will:
+- `viewer_set_groups_visibility(gv: graph_viewer_t *, groups: intvec_t const &, expand: bool, new_current: int = -1) -> bool`: Wrapper around interactive_graph_t::change_visibility. This function will:
+- `viewer_attach_menu_item(g: graph_viewer_t *, name: str) -> bool`: Attach a previously-registered action to the view's context menu. See kernwin.hpp for how to register actions.
+- `viewer_get_selection(gv: graph_viewer_t *, sgs: screen_graph_selection_t) -> bool`: Get currently selected items for graph viewer.
+- `viewer_set_titlebar_height(gv: graph_viewer_t *, height: int) -> int`: Set height of node title bars (grcode_set_titlebar_height)
+- `delete_interactive_graph(g: interactive_graph_t) -> None`: Delete graph object.
+- `create_user_graph_place(node: int, lnnum: int) -> user_graph_place_t *`: Get a copy of a user_graph_place_t (returns a pointer to static storage)
+- `pyg_close(_self: PyObject *) -> None`
+- `pyg_select_node(_self: PyObject *, nid: int) -> None`
+- `pyg_show(_self: PyObject *) -> bool`

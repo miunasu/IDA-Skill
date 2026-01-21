@@ -1,0 +1,856 @@
+# ida_typeinf
+
+Type information in IDA.
+
+In IDA, types are represented by and manipulated through tinfo_t objects.
+
+A tinfo_t can represent a simple type (e.g., int, float), a complex type
+(a structure, enum, union, typedef), or even an array, or a function prototype.
+
+The key types in this file are:
+
+## Constants
+
+- `DEFMASK64`: default bitmask 64bits
+- `RESERVED_BYTE`: multifunctional purpose
+- `TAH_BYTE`: type attribute header byte
+- `FAH_BYTE`: function argument attribute header byte
+- `MAX_DECL_ALIGN`
+- `TAH_HASATTRS`: has extended attributes
+- `TAUDT_UNALIGNED`: struct: unaligned struct
+- `TAUDT_MSSTRUCT`: struct: gcc msstruct attribute
+- `TAUDT_CPPOBJ`: struct: a c++ object, not simple pod type
+- `TAUDT_VFTABLE`: struct: is virtual function table
+- `TAUDT_FIXED`: struct: fixed field offsets, stored in serialized form; cannot be set for unions
+- `TAUDT_TUPLE`: tuple: tuples are like structs but are returned differently from functions
+- `TAFLD_BASECLASS`: field: do not include but inherit from the current field
+- `TAFLD_UNALIGNED`: field: unaligned field
+- `TAFLD_VIRTBASE`: field: virtual base (not supported yet)
+- `TAFLD_VFTABLE`: field: ptr to virtual function table
+- `TAFLD_METHOD`: denotes a udt member function
+- `TAFLD_GAP`: field: gap member (displayed as padding in type details)
+- `TAFLD_REGCMT`: field: the comment is regular (if not set, it is repeatable)
+- `TAFLD_FRAME_R`: frame: function return address frame slot
+- `TAFLD_FRAME_S`: frame: function saved registers frame slot
+- `TAFLD_BYTIL`: field: was the member created due to the type system
+- `TAPTR_PTR32`: ptr: __ptr32
+- `TAPTR_PTR64`: ptr: __ptr64
+- `TAPTR_RESTRICT`: ptr: __restrict
+- `TAPTR_SHIFTED`: ptr: __shifted(parent_struct, delta)
+- `TAENUM_64BIT`: enum: store 64-bit values
+- `TAENUM_UNSIGNED`: enum: unsigned
+- `TAENUM_SIGNED`: enum: signed
+- `TAENUM_OCT`: enum: octal representation, if BTE_HEX
+- `TAENUM_BIN`: enum: binary representation, if BTE_HEX only one of OCT/BIN bits can be set. they are meaningful only if BTE_HEX is used.
+- `TAENUM_NUMSIGN`: enum: signed representation, if BTE_HEX
+- `TAENUM_LZERO`: enum: print numbers with leading zeroes (only for HEX/OCT/BIN)
+- `TAH_ALL`: all defined bits
+- `cvar`
+- `TYPE_BASE_MASK`: the low 4 bits define the basic type
+- `TYPE_FLAGS_MASK`: type flags - they have different meaning depending on the basic type
+- `TYPE_MODIF_MASK`: modifiers.
+- `TYPE_FULL_MASK`: basic type with type flags
+- `BT_UNK`: unknown
+- `BT_VOID`: void
+- `BTMT_SIZE0`: BT_VOID - normal void; BT_UNK - don't use
+- `BTMT_SIZE12`: size = 1 byte if BT_VOID; 2 if BT_UNK
+- `BTMT_SIZE48`: size = 4 bytes if BT_VOID; 8 if BT_UNK
+- `BTMT_SIZE128`: size = 16 bytes if BT_VOID; unknown if BT_UNK (IN struct alignment - see below)
+- `BT_INT8`: __int8
+- `BT_INT16`: __int16
+- `BT_INT32`: __int32
+- `BT_INT64`: __int64
+- `BT_INT128`: __int128 (for alpha & future use)
+- `BT_INT`: natural int. (size provided by idp module)
+- `BTMT_UNKSIGN`: unknown signedness
+- `BTMT_SIGNED`: signed
+- `BTMT_USIGNED`: unsigned
+- `BTMT_UNSIGNED`
+- `BTMT_CHAR`: specify char or segment register
+- `BT_BOOL`: bool
+- `BTMT_DEFBOOL`: size is model specific or unknown(?)
+- `BTMT_BOOL1`: size 1byte
+- `BTMT_BOOL2`: size 2bytes - !inf_is_64bit()
+- `BTMT_BOOL8`: size 8bytes - inf_is_64bit()
+- `BTMT_BOOL4`: size 4bytes
+- `BT_FLOAT`: float
+- `BTMT_FLOAT`: float (4 bytes)
+- `BTMT_DOUBLE`: double (8 bytes)
+- `BTMT_LNGDBL`: long double (compiler specific)
+- `BTMT_SPECFLT`: float (variable size). if processor_t::use_tbyte() then use processor_t::tbyte_size, otherwise 2 bytes
+- `BT_PTR`: pointer. has the following format: [db sizeof(ptr)]; [tah-typeattrs]; type_t...
+- `BTMT_DEFPTR`: default for model
+- `BTMT_NEAR`: near
+- `BTMT_FAR`: far
+- `BTMT_CLOSURE`: closure.
+- `BT_ARRAY`: array
+- `BTMT_NONBASED`: set
+- `BTMT_ARRESERV`: reserved bit
+- `BT_FUNC`: function. format:
+- `BTMT_DEFCALL`: call method - default for model or unknown
+- `BTMT_NEARCALL`: function returns by retn
+- `BTMT_FARCALL`: function returns by retf
+- `BTMT_INTCALL`: function returns by iret in this case cc MUST be 'unknown'
+- `BT_COMPLEX`: struct/union/enum/typedef. format:
+- `BTMT_STRUCT`: struct: MCNT records: type_t; [sdacl-typeattrs];
+- `BTMT_UNION`: union: MCNT records: type_t...
+- `BTMT_ENUM`: enum: next byte bte_t (see below) N records: de delta(s) OR blocks (see below)
+- `BTMT_TYPEDEF`: named reference always p_string name
+- `BT_BITFIELD`: bitfield (only in struct) ['bitmasked' enum see below] next byte is dt ((size in bits << 1) | (unsigned ? 1 : 0))
+- `BTMT_BFLDI8`: __int8
+- `BTMT_BFLDI16`: __int16
+- `BTMT_BFLDI32`: __int32
+- `BTMT_BFLDI64`: __int64
+- `BT_RESERVED`: RESERVED.
+- `BTM_CONST`: const
+- `BTM_VOLATILE`: volatile
+- `BTE_SIZE_MASK`: storage size.
+- `BTE_RESERVED`: must be 0, in order to distinguish from a tah-byte
+- `BTE_BITMASK`: 'subarrays'. In this case ANY record has the following format:
+- `BTE_OUT_MASK`: output style mask
+- `BTE_HEX`: hex
+- `BTE_CHAR`: char or hex
+- `BTE_SDEC`: signed decimal
+- `BTE_UDEC`: unsigned decimal
+- `BTE_ALWAYS`: this bit MUST be present
+- `BT_SEGREG`: segment register
+- `BT_UNK_BYTE`: 1 byte
+- `BT_UNK_WORD`: 2 bytes
+- `BT_UNK_DWORD`: 4 bytes
+- `BT_UNK_QWORD`: 8 bytes
+- `BT_UNK_OWORD`: 16 bytes
+- `BT_UNKNOWN`: unknown size - for parameters
+- `BTF_BYTE`: byte
+- `BTF_UNK`: unknown
+- `BTF_VOID`: void
+- `BTF_INT8`: signed byte
+- `BTF_CHAR`: signed char
+- `BTF_UCHAR`: unsigned char
+- `BTF_UINT8`: unsigned byte
+- `BTF_INT16`: signed short
+- `BTF_UINT16`: unsigned short
+- `BTF_INT32`: signed int
+- `BTF_UINT32`: unsigned int
+- `BTF_INT64`: signed long
+- `BTF_UINT64`: unsigned long
+- `BTF_INT128`: signed 128-bit value
+- `BTF_UINT128`: unsigned 128-bit value
+- `BTF_INT`: int, unknown signedness
+- `BTF_UINT`: unsigned int
+- `BTF_SINT`: singed int
+- `BTF_BOOL`: boolean
+- `BTF_FLOAT`: float
+- `BTF_DOUBLE`: double
+- `BTF_LDOUBLE`: long double
+- `BTF_TBYTE`: see BTMT_SPECFLT
+- `BTF_STRUCT`: struct
+- `BTF_UNION`: union
+- `BTF_ENUM`: enum
+- `BTF_TYPEDEF`: typedef
+- `TA_ORG_TYPEDEF`: the original typedef name (simple string)
+- `TA_ORG_ARRDIM`: the original array dimension (pack_dd)
+- `TA_FORMAT`: info about the 'format' argument. 3 times pack_dd: format_functype_t, argument number of 'format', argument number of '...'
+- `TA_VALUE_REPR`: serialized value_repr_t (used for scalars and arrays)
+- `no_sign`: no sign, or unknown
+- `type_signed`: signed type
+- `type_unsigned`: unsigned type
+- `TIL_ZIP`: pack buckets using zip
+- `TIL_MAC`: til has macro table
+- `TIL_ESI`: extended sizeof info (short, long, longlong)
+- `TIL_UNI`: universal til for any compiler
+- `TIL_ORD`: type ordinal numbers are present
+- `TIL_ALI`: type aliases are present (this bit is used only on the disk)
+- `TIL_MOD`: til has been modified, should be saved
+- `TIL_STM`: til has extra streams
+- `TIL_SLD`: sizeof(long double)
+- `TIL_ECC`: extended callcnv_t
+- `TIL_ADD_FAILED`: see errbuf
+- `TIL_ADD_OK`: some tils were added
+- `TIL_ADD_ALREADY`: the base til was already added
+- `CM_MASK`
+- `CM_UNKNOWN`: unknown
+- `CM_N8_F16`: if sizeof(int)<=2: near 1 byte, far 2 bytes
+- `CM_N64`: if sizeof(int)>2: near 8 bytes, far 8 bytes
+- `CM_N16_F32`: near 2 bytes, far 4 bytes
+- `CM_N32_F48`: near 4 bytes, far 6 bytes
+- `CM_M_MASK`
+- `CM_M_NN`: small: code=near, data=near (or unknown if CM_UNKNOWN)
+- `CM_M_FF`: large: code=far, data=far
+- `CM_M_NF`: compact: code=near, data=far
+- `CM_M_FN`: medium: code=far, data=near
+- `CM_CC_MASK`
+- `CM_CC_INVALID`: this value is invalid
+- `CM_CC_UNKNOWN`: unknown calling convention
+- `CM_CC_VOIDARG`: function without arguments if has other cc and argnum == 0, represent as f() - unknown list
+- `CM_CC_CDECL`: stack
+- `CM_CC_ELLIPSIS`: cdecl + ellipsis
+- `CM_CC_STDCALL`: stack, purged
+- `CM_CC_PASCAL`: stack, purged, reverse order of args
+- `CM_CC_FASTCALL`: stack, purged (x86), first args are in regs (compiler-dependent)
+- `CM_CC_THISCALL`: stack, purged (x86), first arg is in reg (compiler-dependent)
+- `CM_CC_SWIFT`: (Swift) arguments and return values in registers (compiler-dependent)
+- `CM_CC_SPOILED`: This is NOT a cc! Mark of __spoil record the low nibble is count and after n {spoilreg_t} present real cm_t byte. if n == BFA_FUNC_MARKER, the next byte is the function attribute byte.
+- `CM_CC_GOLANG`: (Go) arguments and return value reg/stack depending on version
+- `CM_CC_RESERVE3`: reserved; used for internal needs
+- `CM_CC_SPECIALE`: CM_CC_SPECIAL with ellipsis
+- `CM_CC_SPECIALP`: Equal to CM_CC_SPECIAL, but with purged stack.
+- `CM_CC_SPECIAL`: usercall: locations of all arguments and the return value are explicitly specified
+- `CM_CC_LAST_USERCALL`
+- `CM_CC_GOSTK`: (Go) arguments and return value in stack
+- `CM_CC_FIRST_PLAIN_CUSTOM`
+- `BFA_NORET`: __noreturn
+- `BFA_PURE`: __pure
+- `BFA_HIGH`: high level prototype (with possibly hidden args)
+- `BFA_STATIC`: static
+- `BFA_VIRTUAL`: virtual
+- `BFA_FUNC_MARKER`: This is NOT a cc! (used internally as a marker)
+- `BFA_FUNC_EXT_FORMAT`: This is NOT a real attribute (used internally as marker for extended format)
+- `ALOC_NONE`: none
+- `ALOC_STACK`: stack offset
+- `ALOC_DIST`: distributed (scattered)
+- `ALOC_REG1`: one register (and offset within it)
+- `ALOC_REG2`: register pair
+- `ALOC_RREL`: register relative
+- `ALOC_STATIC`: global address
+- `ALOC_CUSTOM`: custom argloc (7 or higher)
+- `PRALOC_VERIFY`: interr if illegal argloc
+- `PRALOC_STKOFF`: print stack offsets
+- `C_PC_TINY`
+- `C_PC_SMALL`
+- `C_PC_COMPACT`
+- `C_PC_MEDIUM`
+- `C_PC_LARGE`
+- `C_PC_HUGE`
+- `C_PC_FLAT`
+- `CCI_VARARG`: is variadic?
+- `CCI_PURGE`: purges arguments?
+- `CCI_USER`: is usercall? not tested
+- `ARGREGS_POLICY_UNDEFINED`
+- `ARGREGS_GP_ONLY`: GP registers used for all arguments.
+- `ARGREGS_INDEPENDENT`: FP/GP registers used separately (like gcc64)
+- `ARGREGS_BY_SLOTS`: fixed FP/GP register per each slot (like vc64)
+- `ARGREGS_FP_MASKS_GP`: FP register also consumes one or more GP regs but not vice versa (aix ppc ABI)
+- `ARGREGS_MIPS_O32`: MIPS ABI o32.
+- `ARGREGS_RISCV`: Risc-V API FP arguments are passed in GP registers if FP registers are exhausted and GP ones are not. Wide FP arguments are passed in GP registers. Variadic FP arguments are passed in GP registers.
+- `SETCOMP_OVERRIDE`: may override old compiler info
+- `SETCOMP_ONLY_ID`: cc has only 'id' field; the rest will be set to defaults corresponding to the program bitness
+- `SETCOMP_ONLY_ABI`: ignore cc field complete, use only abiname
+- `SETCOMP_BY_USER`: invoked by user, cannot be replaced by module/loader
+- `MAX_FUNC_ARGS`: max number of function arguments
+- `ABS_UNK`
+- `ABS_NO`
+- `ABS_YES`
+- `SC_UNK`: unknown
+- `SC_TYPE`: typedef
+- `SC_EXT`: extern
+- `SC_STAT`: static
+- `SC_REG`: register
+- `SC_AUTO`: auto
+- `SC_FRIEND`: friend
+- `SC_VIRT`: virtual
+- `HTI_CPP`: C++ mode (not implemented)
+- `HTI_INT`: debug: print internal representation of types
+- `HTI_EXT`: debug: print external representation of types
+- `HTI_LEX`: debug: print tokens
+- `HTI_UNP`: debug: check the result by unpacking it
+- `HTI_TST`: test mode: discard the result
+- `HTI_FIL`: "input" is file name, otherwise "input" contains a C declaration
+- `HTI_MAC`: define macros from the base tils
+- `HTI_NWR`: no warning messages
+- `HTI_NER`: ignore all errors but display them
+- `HTI_DCL`: don't complain about redeclarations
+- `HTI_NDC`: don't decorate names
+- `HTI_PAK`: explicit structure pack value (#pragma pack)
+- `HTI_PAK_SHIFT`: shift for HTI_PAK. This field should be used if you want to remember an explicit pack value for each structure/union type. See HTI_PAK... definitions
+- `HTI_PAKDEF`: default pack value
+- `HTI_PAK1`: #pragma pack(1)
+- `HTI_PAK2`: #pragma pack(2)
+- `HTI_PAK4`: #pragma pack(4)
+- `HTI_PAK8`: #pragma pack(8)
+- `HTI_PAK16`: #pragma pack(16)
+- `HTI_HIGH`: assume high level prototypes (with hidden args, etc)
+- `HTI_LOWER`: lower the function prototypes
+- `HTI_RAWARGS`: leave argument names unchanged (do not remove underscores)
+- `HTI_RELAXED`: accept references to unknown namespaces
+- `HTI_NOBASE`: do not inspect base tils
+- `HTI_SEMICOLON`: do not complain if the terminating semicolon is absent
+- `HTI_STANDALONE`: should parse standalone declaration, it may contain qualified name and type names, strictly speaking it is not a valid C++ code, IDA Pro specific
+- `PT_SIL`: silent, no messages
+- `PT_NDC`: don't decorate names
+- `PT_TYP`: return declared type information
+- `PT_VAR`: return declared object information
+- `PT_PACKMASK`: mask for pack alignment values
+- `PT_HIGH`: assume high level prototypes (with hidden args, etc)
+- `PT_LOWER`: lower the function prototypes
+- `PT_REPLACE`: replace the old type (used in idc)
+- `PT_RAWARGS`: leave argument names unchanged (do not remove underscores)
+- `PT_RELAXED`: accept references to unknown namespaces
+- `PT_EMPTY`: accept empty decl
+- `PT_SEMICOLON`: append the terminating semicolon
+- `PT_SYMBOL`: accept a symbol name and return its type. e.g. "LoadLibrary" will return its prototype
+- `PRTYPE_1LINE`: print to one line
+- `PRTYPE_MULTI`: print to many lines
+- `PRTYPE_TYPE`: print type declaration (not variable declaration)
+- `PRTYPE_PRAGMA`: print pragmas for alignment
+- `PRTYPE_SEMI`: append ; to the end
+- `PRTYPE_CPP`: use c++ name (only for print_type())
+- `PRTYPE_DEF`: tinfo_t: print definition, if available
+- `PRTYPE_NOARGS`: tinfo_t: do not print function argument names
+- `PRTYPE_NOARRS`: tinfo_t: print arguments with FAI_ARRAY as pointers
+- `PRTYPE_NORES`: tinfo_t: never resolve types (meaningful with PRTYPE_DEF)
+- `PRTYPE_RESTORE`: tinfo_t: print restored types for FAI_ARRAY and FAI_STRUCT
+- `PRTYPE_NOREGEX`: do not apply regular expressions to beautify name
+- `PRTYPE_COLORED`: add color tag COLOR_SYMBOL for any parentheses, commas and colons
+- `PRTYPE_METHODS`: tinfo_t: print udt methods
+- `PRTYPE_1LINCMT`: print comments even in the one line mode
+- `PRTYPE_HEADER`: print only type header (only for definitions)
+- `PRTYPE_OFFSETS`: print udt member offsets
+- `PRTYPE_MAXSTR`: limit the output length to 1024 bytes (the output may be slightly longer)
+- `PRTYPE_TAIL`: print only the definition tail (only for definitions, exclusive with PRTYPE_HEADER)
+- `PRTYPE_ARGLOCS`: print function arglocs (not only for usercall)
+- `NTF_TYPE`: type name
+- `NTF_SYMU`: symbol, name is unmangled ('func')
+- `NTF_SYMM`: symbol, name is mangled ('_func'); only one of NTF_TYPE and NTF_SYMU, NTF_SYMM can be used
+- `NTF_NOBASE`: don't inspect base tils (for get_named_type)
+- `NTF_REPLACE`: replace original type (for set_named_type)
+- `NTF_UMANGLED`: name is unmangled (don't use this flag)
+- `NTF_NOCUR`: don't inspect current til file (for get_named_type)
+- `NTF_64BIT`: value is 64bit
+- `NTF_FIXNAME`: force-validate the name of the type when setting (set_named_type, set_numbered_type only)
+- `NTF_IDBENC`: the name is given in the IDB encoding; non-ASCII bytes will be decoded accordingly (set_named_type, set_numbered_type only)
+- `NTF_CHKSYNC`: check that synchronization to IDB passed OK (set_numbered_type, set_named_type)
+- `NTF_NO_NAMECHK`: do not validate type name (set_numbered_type, set_named_type)
+- `NTF_COPY`: save a new type definition, not a typeref (tinfo_t::set_numbered_type, tinfo_t::set_named_type)
+- `TERR_OK`: ok
+- `TERR_SAVE_ERROR`: failed to save
+- `TERR_SERIALIZE`: failed to serialize
+- `TERR_BAD_NAME`: name s is not acceptable
+- `TERR_BAD_ARG`: bad argument
+- `TERR_BAD_TYPE`: bad type
+- `TERR_BAD_SIZE`: bad size d
+- `TERR_BAD_INDEX`: bad index d
+- `TERR_BAD_ARRAY`: arrays are forbidden as function arguments
+- `TERR_BAD_BF`: bitfields are forbidden as function arguments
+- `TERR_BAD_OFFSET`: bad member offset s
+- `TERR_BAD_UNIVAR`: unions cannot have variable sized members
+- `TERR_BAD_VARLAST`: variable sized member must be the last member in the structure
+- `TERR_OVERLAP`: the member overlaps with other members that cannot be deleted
+- `TERR_BAD_SUBTYPE`: recursive structure nesting is forbidden
+- `TERR_BAD_VALUE`: value 0xI64X is not acceptable
+- `TERR_NO_BMASK`: bitmask 0xI64X is not found
+- `TERR_BAD_BMASK`: Bad enum member mask 0xI64X. The specified mask should not intersect with any existing mask in the enum. Zero masks are prohibited too.
+- `TERR_BAD_MSKVAL`: bad bmask and value combination (value=0xI64X; bitmask 0xI64X)
+- `TERR_BAD_REPR`: bad or incompatible field representation
+- `TERR_GRP_NOEMPTY`: could not delete group mask for not empty group 0xI64X
+- `TERR_DUPNAME`: duplicate name s
+- `TERR_UNION_BF`: unions cannot have bitfields
+- `TERR_BAD_TAH`: bad bits in the type attributes (TAH bits)
+- `TERR_BAD_BASE`: bad base class
+- `TERR_BAD_GAP`: bad gap
+- `TERR_NESTED`: recursive structure nesting is forbidden
+- `TERR_NOT_COMPAT`: the new type is not compatible with the old type
+- `TERR_BAD_LAYOUT`: failed to calculate the structure/union layout
+- `TERR_BAD_GROUPS`: bad group sizes for bitmask enum
+- `TERR_BAD_SERIAL`: enum value has too many serials
+- `TERR_ALIEN_NAME`: enum member name is used in another enum
+- `TERR_STOCK`: stock type info cannot be modified
+- `TERR_ENUM_SIZE`: bad enum size
+- `TERR_NOT_IMPL`: not implemented
+- `TERR_TYPE_WORSE`: the new type is worse than the old type
+- `TERR_BAD_FX_SIZE`: cannot extend struct beyond fixed size
+- `TERR_STRUCT_SIZE`: bad fixed structure size
+- `TERR_NOT_FOUND`: member not found
+- `TERR_COUNT`
+- `CCN_C`
+- `CCN_CPP`
+- `ADDTIL_DEFAULT`: default behavior
+- `ADDTIL_INCOMP`: load incompatible tils
+- `ADDTIL_SILENT`: do not ask any questions
+- `ADDTIL_FAILED`: something bad, the warning is displayed
+- `ADDTIL_OK`: ok, til is loaded
+- `ADDTIL_COMP`: ok, but til is not compatible with the current compiler
+- `ADDTIL_ABORTED`: til was not loaded (incompatible til rejected by user)
+- `TINFO_GUESSED`: this is a guessed type
+- `TINFO_DEFINITE`: this is a definite type
+- `TINFO_DELAYFUNC`: if type is a function and no function exists at ea, schedule its creation and argument renaming to auto-analysis, otherwise try to create it immediately
+- `TINFO_STRICT`: never convert given type to another one before applying
+- `GUESS_FUNC_FAILED`: couldn't guess the function type
+- `GUESS_FUNC_TRIVIAL`: the function type doesn't have interesting info
+- `GUESS_FUNC_OK`: ok, some non-trivial information is gathered
+- `STI_PCHAR`: char *
+- `STI_PUCHAR`: uint8 *
+- `STI_PCCHAR`: const char *
+- `STI_PCUCHAR`: const uint8 *
+- `STI_PBYTE`: _BYTE *
+- `STI_PINT`: int *
+- `STI_PUINT`: unsigned int *
+- `STI_PVOID`: void *
+- `STI_PPVOID`: void **
+- `STI_PCVOID`: const void *
+- `STI_ACHAR`: char[]
+- `STI_AUCHAR`: uint8[]
+- `STI_ACCHAR`: const char[]
+- `STI_ACUCHAR`: const uint8[]
+- `STI_FPURGING`: void __userpurge(int)
+- `STI_FDELOP`: void __cdecl(void *)
+- `STI_MSGSEND`: void *(void *, const char *, ...)
+- `STI_AEABI_LCMP`: int __fastcall __pure(int64 x, int64 y)
+- `STI_AEABI_ULCMP`: int __fastcall __pure(uint64 x, uint64 y)
+- `STI_DONT_USE`: unused stock type id; should not be used
+- `STI_SIZE_T`: size_t
+- `STI_SSIZE_T`: ssize_t
+- `STI_AEABI_MEMCPY`: void __fastcall(void *, const void *, size_t)
+- `STI_AEABI_MEMSET`: void __fastcall(void *, size_t, int)
+- `STI_AEABI_MEMCLR`: void __fastcall(void *, size_t)
+- `STI_RTC_CHECK_2`: int16 __fastcall(int16 x)
+- `STI_RTC_CHECK_4`: int32 __fastcall(int32 x)
+- `STI_RTC_CHECK_8`: int64 __fastcall(int64 x)
+- `STI_COMPLEX64`: struct complex64_t { float real, imag; }
+- `STI_COMPLEX128`: struct complex128_t { double real, imag; }
+- `STI_PUNKNOWN`: _UNKNOWN *
+- `STI_LAST`
+- `ETF_NO_SAVE`: don't save to til (normally typerefs are saved to til) A call with ETF_NO_SAVE must be followed by a call without it. Otherwise there may be inconsistencies between the memory and the type library.
+- `ETF_NO_LAYOUT`: don't calc type layout before editing
+- `ETF_MAY_DESTROY`: may destroy other members
+- `ETF_COMPATIBLE`: new type must be compatible with the old
+- `ETF_FUNCARG`: udm - member is a function argument (cannot create arrays)
+- `ETF_FORCENAME`: anyway use name, see below for more usage description
+- `ETF_AUTONAME`: udm - generate a member name if was not specified (add_udm, set_udm_type)
+- `ETF_BYTIL`: udm - new type was created by the type subsystem
+- `ETF_NO_ARRAY`: add_udm, set_udm_type - do not convert type to an array on the size mismatch
+- `GTD_CALC_LAYOUT`: calculate udt layout
+- `GTD_NO_LAYOUT`: don't calculate udt layout please note that udt layout may have been calculated earlier
+- `GTD_DEL_BITFLDS`: delete udt bitfields
+- `GTD_CALC_ARGLOCS`: calculate func arg locations
+- `GTD_NO_ARGLOCS`: don't calculate func arg locations please note that the locations may have been calculated earlier
+- `GTS_NESTED`: nested type (embedded into a udt)
+- `GTS_BASECLASS`: is baseclass of a udt
+- `SUDT_SORT`: fields are not sorted by offset, sort them first
+- `SUDT_ALIGN`: recalculate field alignments, struct packing, etc to match the offsets and size info
+- `SUDT_GAPS`: allow to fill gaps with additional members (_BYTE[])
+- `SUDT_UNEX`: references to nonexistent member types are acceptable; in this case it is better to set the corresponding udm_t::fda field to the type alignment. If this field is not set, ida will try to guess the alignment.
+- `SUDT_FAST`: serialize without verifying offsets and alignments
+- `SUDT_CONST`: only for serialize_udt: make type const
+- `SUDT_VOLATILE`: only for serialize_udt: make type volatile
+- `SUDT_TRUNC`: serialize: truncate useless strings from fields, fldcmts
+- `SUDT_SERDEF`: serialize: if a typeref, serialize its definition
+- `COMP_MASK`
+- `COMP_UNK`: Unknown.
+- `COMP_MS`: Visual C++.
+- `COMP_BC`: Borland C++.
+- `COMP_WATCOM`: Watcom C++.
+- `COMP_GNU`: GNU C++.
+- `COMP_VISAGE`: Visual Age C++.
+- `COMP_BP`: Delphi.
+- `COMP_UNSURE`: uncertain compiler id
+- `BADSIZE`: bad type size
+- `FIRST_NONTRIVIAL_TYPID`: Denotes the first bit describing a nontrivial type.
+- `TYPID_ISREF`: Identifies that a type that is a typeref.
+- `TYPID_SHIFT`: First type detail bit.
+- `STRMEM_MASK`
+- `STRMEM_OFFSET`: get member by offset
+- `STRMEM_INDEX`: get member by number
+- `STRMEM_AUTO`: get member by offset if struct, or get member by index if union
+- `STRMEM_NAME`: get member by name
+- `STRMEM_TYPE`: get member by type.
+- `STRMEM_SIZE`: get member by size.
+- `STRMEM_MINS`: get smallest member by size.
+- `STRMEM_MAXS`: get biggest member by size.
+- `STRMEM_LOWBND`: get member by offset or the next member (lower bound)
+- `STRMEM_NEXT`: get next member after the offset
+- `STRMEM_VFTABLE`: can be combined with STRMEM_OFFSET, STRMEM_AUTO get vftable instead of the base class
+- `STRMEM_SKIP_EMPTY`: can be combined with STRMEM_OFFSET, STRMEM_AUTO skip empty members (i.e. having zero size) only last empty member can be returned
+- `STRMEM_CASTABLE_TO`: can be combined with STRMEM_TYPE: member type must be castable to the specified type
+- `STRMEM_ANON`: can be combined with STRMEM_NAME: look inside anonymous members too.
+- `STRMEM_SKIP_GAPS`: can be combined with STRMEM_OFFSET, STRMEM_LOWBND skip gap members
+- `TCMP_EQUAL`: are types equal?
+- `TCMP_IGNMODS`: ignore const/volatile modifiers
+- `TCMP_AUTOCAST`: can t1 be cast into t2 automatically?
+- `TCMP_MANCAST`: can t1 be cast into t2 manually?
+- `TCMP_CALL`: can t1 be called with t2 type?
+- `TCMP_DELPTR`: remove pointer from types before comparing
+- `TCMP_DECL`: compare declarations without resolving them
+- `TCMP_ANYBASE`: accept any base class when casting
+- `TCMP_SKIPTHIS`: skip the first function argument in comparison
+- `TCMP_DEEP_UDT`: compare udt by member/attributes
+- `FAI_HIDDEN`: hidden argument
+- `FAI_RETPTR`: pointer to return value. implies hidden
+- `FAI_STRUCT`: was initially a structure
+- `FAI_ARRAY`: was initially an array; see "__org_typedef" or "__org_arrdim" type attributes to determine the original type
+- `FAI_UNUSED`: argument is not used by the function
+- `FTI_SPOILED`: information about spoiled registers is present
+- `FTI_NORET`: noreturn
+- `FTI_PURE`: __pure
+- `FTI_HIGH`: high level prototype (with possibly hidden args)
+- `FTI_STATIC`: static
+- `FTI_VIRTUAL`: virtual
+- `FTI_CALLTYPE`: mask for FTI_*CALL
+- `FTI_DEFCALL`: default call
+- `FTI_NEARCALL`: near call
+- `FTI_FARCALL`: far call
+- `FTI_INTCALL`: interrupt call
+- `FTI_ARGLOCS`: info about argument locations has been calculated (stkargs and retloc too)
+- `FTI_EXPLOCS`: all arglocs are specified explicitly
+- `FTI_CONST`: const member function
+- `FTI_CTOR`: constructor
+- `FTI_DTOR`: destructor
+- `FTI_ALL`: all defined bits
+- `CC_CDECL_OK`: can use __cdecl calling convention?
+- `CC_ALLOW_ARGPERM`: disregard argument order?
+- `CC_ALLOW_REGHOLES`: allow holes in register argument list?
+- `CC_HAS_ELLIPSIS`: function has a variable list of arguments?
+- `CC_GOLANG_OK`: can use __golang calling convention
+- `FMTFUNC_PRINTF`
+- `FMTFUNC_SCANF`
+- `FMTFUNC_STRFTIME`
+- `FMTFUNC_STRFMON`
+- `MAX_ENUM_SERIAL`: Max number of identical constants allowed for one enum type.
+- `FRB_MASK`: Mask for the value type (* means requires additional info):
+- `FRB_UNK`: Unknown.
+- `FRB_NUMB`: Binary number.
+- `FRB_NUMO`: Octal number.
+- `FRB_NUMH`: Hexadecimal number.
+- `FRB_NUMD`: Decimal number.
+- `FRB_FLOAT`: Floating point number (for interpreting an integer type as a floating value)
+- `FRB_CHAR`: Char.
+- `FRB_SEG`: Segment.
+- `FRB_ENUM`: *Enumeration
+- `FRB_OFFSET`: *Offset
+- `FRB_STRLIT`: *String literal (used for arrays)
+- `FRB_STROFF`: *Struct offset
+- `FRB_CUSTOM`: *Custom data type
+- `FRB_INVSIGN`: Invert sign (0x01 is represented as -0xFF)
+- `FRB_INVBITS`: Invert bits (0x01 is represented as ~0xFE)
+- `FRB_SIGNED`: Force signed representation.
+- `FRB_LZERO`: Toggle leading zeroes (used for integers)
+- `FRB_TABFORM`: has additional tabular parameters
+- `STRUC_SEPARATOR`: structname.fieldname
+- `VTBL_SUFFIX`
+- `VTBL_MEMNAME`
+- `TPOS_LNNUM`
+- `TPOS_REGCMT`
+- `TVIS_TYPE`: new type info is present
+- `TVIS_NAME`: new name is present (only for funcargs and udt members)
+- `TVIS_CMT`: new comment is present (only for udt members)
+- `TVIS_RPTCMT`: the new comment is repeatable
+- `TVST_PRUNE`: don't visit children of current type
+- `TVST_DEF`: visit type definition (meaningful for typerefs)
+- `TVST_LEVEL`
+- `PIO_NOATTR_FAIL`: missing attributes are not ok
+- `PIO_IGNORE_PTRS`: do not follow pointers
+- `UTP_ENUM`
+- `UTP_STRUCT`
+- `VALSTR_OPEN`: printed opening curly brace '{'
+- `PDF_INCL_DEPS`: Include all type dependencies.
+- `PDF_DEF_FWD`: Allow forward declarations.
+- `PDF_DEF_BASE`: Include base types: __int8, __int16, etc..
+- `PDF_HEADER_CMT`: Prepend output with a descriptive comment.
+- `PT_FILE`
+- `PT_STANDALONE`
+- `cvar`
+- `sc_auto`
+- `sc_ext`
+- `sc_friend`
+- `sc_reg`
+- `sc_stat`
+- `sc_type`
+- `sc_unk`
+- `sc_virt`
+- `TERR_SAVE`
+- `TERR_WRONGNAME`
+- `BADORD`
+- `enum_member_vec_t`
+- `enum_member_t`
+- `udt_member_t`
+
+## Classes Overview
+
+- `funcargvec_t`
+- `reginfovec_t`
+- `edmvec_t`
+- `argpartvec_t`
+- `valstrvec_t`
+- `regobjvec_t`
+- `type_attrs_t`
+- `udtmembervec_template_t`
+- `type_attr_t`
+- `til_t`
+- `rrel_t`
+- `argloc_t`
+- `argpart_t`
+- `scattered_aloc_t`
+- `aloc_visitor_t`
+- `const_aloc_visitor_t`
+- `stkarg_area_info_t`
+- `custom_callcnv_t`
+- `callregs_t`
+- `tinfo_t`
+- `simd_info_t`
+- `ptr_type_data_t`
+- `array_type_data_t`
+- `funcarg_t`
+- `func_type_data_t`
+- `edm_t`
+- `enum_type_data_t`
+- `typedef_type_data_t`
+- `custom_data_type_info_t`
+- `value_repr_t`
+- `udm_t`
+- `udtmembervec_t`
+- `udt_type_data_t`
+- `udm_visitor_t`
+- `bitfield_type_data_t`
+- `type_mods_t`
+- `tinfo_visitor_t`
+- `regobj_t`
+- `regobjs_t`
+- `argtinfo_helper_t`
+- `lowertype_helper_t`
+- `ida_lowertype_helper_t`
+- `valstr_t`
+- `valstrs_t`
+- `text_sink_t`
+- `til_symbol_t`
+- `predicate_t`
+- `til_type_ref_t`
+
+## Functions Overview
+
+- `deserialize_tinfo(tif: tinfo_t, til: til_t, ptype: type_t const **, pfields: p_list const **, pfldcmts: p_list const **, cmt: str = None) -> bool`
+- `is_type_const(t: type_t) -> bool`: See BTM_CONST.
+- `is_type_volatile(t: type_t) -> bool`: See BTM_VOLATILE.
+- `get_base_type(t: type_t) -> type_t`: Get get basic type bits (TYPE_BASE_MASK)
+- `get_type_flags(t: type_t) -> type_t`: Get type flags (TYPE_FLAGS_MASK)
+- `get_full_type(t: type_t) -> type_t`: Get basic type bits + type flags (TYPE_FULL_MASK)
+- `is_typeid_last(t: type_t) -> bool`: Is the type_t the last byte of type declaration? (there are no additional bytes after a basic type, see _BT_LAST_BASIC)
+- `is_type_partial(t: type_t) -> bool`: Identifies an unknown or void type with a known size (see Basic type: unknown & void)
+- `is_type_void(t: type_t) -> bool`: See BTF_VOID.
+- `is_type_unknown(t: type_t) -> bool`: See BT_UNKNOWN.
+- `is_type_ptr(t: type_t) -> bool`: See BT_PTR.
+- `is_type_complex(t: type_t) -> bool`: See BT_COMPLEX.
+- `is_type_func(t: type_t) -> bool`: See BT_FUNC.
+- `is_type_array(t: type_t) -> bool`: See BT_ARRAY.
+- `is_type_typedef(t: type_t) -> bool`: See BTF_TYPEDEF.
+- `is_type_sue(t: type_t) -> bool`: Is the type a struct/union/enum?
+- `is_type_struct(t: type_t) -> bool`: See BTF_STRUCT.
+- `is_type_union(t: type_t) -> bool`: See BTF_UNION.
+- `is_type_struni(t: type_t) -> bool`: Is the type a struct or union?
+- `is_type_enum(t: type_t) -> bool`: See BTF_ENUM.
+- `is_type_bitfld(t: type_t) -> bool`: See BT_BITFIELD.
+- `is_type_int(bt: type_t) -> bool`: Does the type_t specify one of the basic types in Basic type: integer?
+- `is_type_int128(t: type_t) -> bool`: Does the type specify a 128-bit value? (signed or unsigned, see Basic type: integer)
+- `is_type_int64(t: type_t) -> bool`: Does the type specify a 64-bit value? (signed or unsigned, see Basic type: integer)
+- `is_type_int32(t: type_t) -> bool`: Does the type specify a 32-bit value? (signed or unsigned, see Basic type: integer)
+- `is_type_int16(t: type_t) -> bool`: Does the type specify a 16-bit value? (signed or unsigned, see Basic type: integer)
+- `is_type_char(t: type_t) -> bool`: Does the type specify a char value? (signed or unsigned, see Basic type: integer)
+- `is_type_paf(t: type_t) -> bool`: Is the type a pointer, array, or function type?
+- `is_type_ptr_or_array(t: type_t) -> bool`: Is the type a pointer or array type?
+- `is_type_floating(t: type_t) -> bool`: Is the type a floating point type?
+- `is_type_integral(t: type_t) -> bool`: Is the type an integral type (char/short/int/long/bool)?
+- `is_type_ext_integral(t: type_t) -> bool`: Is the type an extended integral type? (integral or enum)
+- `is_type_arithmetic(t: type_t) -> bool`: Is the type an arithmetic type? (floating or integral)
+- `is_type_ext_arithmetic(t: type_t) -> bool`: Is the type an extended arithmetic type? (arithmetic or enum)
+- `is_type_uint(t: type_t) -> bool`: See BTF_UINT.
+- `is_type_uchar(t: type_t) -> bool`: See BTF_UCHAR.
+- `is_type_uint16(t: type_t) -> bool`: See BTF_UINT16.
+- `is_type_uint32(t: type_t) -> bool`: See BTF_UINT32.
+- `is_type_uint64(t: type_t) -> bool`: See BTF_UINT64.
+- `is_type_uint128(t: type_t) -> bool`: See BTF_UINT128.
+- `is_type_ldouble(t: type_t) -> bool`: See BTF_LDOUBLE.
+- `is_type_double(t: type_t) -> bool`: See BTF_DOUBLE.
+- `is_type_float(t: type_t) -> bool`: See BTF_FLOAT.
+- `is_type_tbyte(t: type_t) -> bool`: See BTF_FLOAT.
+- `is_type_bool(t: type_t) -> bool`: See BTF_BOOL.
+- `is_tah_byte(t: type_t) -> bool`: The TAH byte (type attribute header byte) denotes the start of type attributes. (see "tah-typeattrs" in the type bit definitions)
+- `is_sdacl_byte(t: type_t) -> bool`: Identify an sdacl byte. The first sdacl byte has the following format: 11xx000x. The sdacl bytes are appended to udt fields. They indicate the start of type attributes (as the tah-bytes do). The sdacl bytes are used in the udt headers instead of the tah-byte. This is done for compatibility with old databases, they were already using sdacl bytes in udt headers and as udt field postfixes. (see "sdacl-typeattrs" in the type bit definitions)
+- `append_argloc(out: qtype *, vloc: argloc_t) -> bool`: Serialize argument location
+- `extract_argloc(vloc: argloc_t, ptype: type_t const **, forbid_stkoff: bool) -> bool`: Deserialize an argument location. Argument FORBID_STKOFF checks location type. It can be used, for example, to check the return location of a function that cannot return a value in the stack
+- `resolve_typedef(til: til_t, type: type_t const *) -> type_t const *`
+- `is_restype_void(til: til_t, type: type_t const *) -> bool`
+- `is_restype_enum(til: til_t, type: type_t const *) -> bool`
+- `is_restype_struni(til: til_t, type: type_t const *) -> bool`
+- `is_restype_struct(til: til_t, type: type_t const *) -> bool`
+- `get_scalar_bt(size: int) -> type_t`
+- `new_til(name: str, desc: str) -> til_t *`: Initialize a til.
+- `load_til(name: str, tildir: str = None) -> str`: Load til from a file without adding it to the database list (see also add_til). Failure to load base tils are reported into 'errbuf'. They do not prevent loading of the main til.
+- `compact_til(ti: til_t) -> bool`: Collect garbage in til. Must be called before storing the til.
+- `store_til(ti: til_t, tildir: str, name: str) -> bool`: Store til to a file. If the til contains garbage, it will be collected before storing the til. Your plugin should call compact_til() before calling store_til().
+- `free_til(ti: til_t) -> None`: Free memory allocated by til.
+- `load_til_header(tildir: str, name: str) -> str`: Get human-readable til description.
+- `is_code_far(cm: cm_t) -> bool`: Does the given model specify far code?.
+- `is_data_far(cm: cm_t) -> bool`: Does the given model specify far data?.
+- `verify_argloc(vloc: argloc_t, size: int, gaps: rangeset_t) -> int`: Verify argloc_t.
+- `optimize_argloc(vloc: argloc_t, size: int, gaps: rangeset_t) -> bool`: Verify and optimize scattered argloc into simple form. All new arglocs must be processed by this function.
+- `print_argloc(vloc: argloc_t, size: int = 0, vflags: int = 0) -> size_t`: Convert an argloc to human readable form.
+- `for_all_arglocs(vv: aloc_visitor_t, vloc: argloc_t, size: int, off: int = 0) -> int`: Compress larger argloc types and initiate the aloc visitor.
+- `for_all_const_arglocs(vv: const_aloc_visitor_t, vloc: argloc_t, size: int, off: int = 0) -> int`: See for_all_arglocs()
+- `is_user_cc(cc: callcnv_t) -> bool`: Does the calling convention specify argument locations explicitly?
+- `is_vararg_cc(cc: callcnv_t) -> bool`: Does the calling convention use ellipsis?
+- `is_purging_cc(cc: callcnv_t) -> bool`: Does the calling convention clean the stack arguments upon return?.
+- `is_golang_cc(cc: callcnv_t) -> bool`: GO language calling convention (return value in stack)?
+- `is_custom_callcnv(cc: callcnv_t) -> bool`: Is custom calling convention?
+- `is_swift_cc(cc: callcnv_t) -> bool`: Swift calling convention (arguments and return values in registers)?
+- `get_stkarg_area_info(out: stkarg_area_info_t, cc: callcnv_t) -> bool`: Some calling conventions foresee special areas on the stack for call arguments. This structure lists their sizes.
+- `get_custom_callcnv(callcnv: callcnv_t) -> custom_callcnv_t const *`: Retrieve custom calling convention details.
+- `find_custom_callcnv(name: str) -> callcnv_t`: Find a calling convention by its name
+- `get_custom_callcnvs(names: qstrvec_t *, codes: callcnvs_t *) -> size_t`: Get all custom calling conventions
+- `get_comp(comp: comp_t) -> comp_t`: Get compiler bits.
+- `get_compiler_name(id: comp_t) -> str`: Get full compiler name.
+- `get_compiler_abbr(id: comp_t) -> str`: Get abbreviated compiler name.
+- `get_compilers(ids: compvec_t *, names: qstrvec_t *, abbrs: qstrvec_t *) -> None`: Get names of all built-in compilers.
+- `is_comp_unsure(comp: comp_t) -> comp_t`: See COMP_UNSURE.
+- `default_compiler() -> comp_t`: Get compiler specified by inf.cc.
+- `is_gcc() -> bool`: Is the target compiler COMP_GNU?
+- `is_gcc32() -> bool`: Is the target compiler 32 bit gcc?
+- `is_gcc64() -> bool`: Is the target compiler 64 bit gcc?
+- `gcc_layout() -> bool`: Should use the struct/union layout as done by gcc?
+- `set_compiler(cc: compiler_info_t, flags: int, abiname: str = None) -> bool`: Change current compiler.
+- `set_compiler_id(id: comp_t, abiname: str = None) -> bool`: Set the compiler id (see Compiler IDs)
+- `set_abi_name(abiname: str, user_level: bool = False) -> bool`: Set abi name (see Compiler IDs)
+- `get_abi_name() -> str`: Get ABI name.
+- `append_abi_opts(abi_opts: str, user_level: bool = False) -> bool`: Add/remove/check ABI option General form of full abi name: abiname-opt1-opt2-... or -opt1-opt2-...
+- `remove_abi_opts(abi_opts: str, user_level: bool = False) -> bool`
+- `set_compiler_string(compstr: str, user_level: bool) -> bool`
+- `use_golang_cc() -> bool`: is GOLANG calling convention used by default?
+- `switch_to_golang() -> None`: switch to GOLANG calling convention (to be used as default CC)
+- `convert_pt_flags_to_hti(pt_flags: int) -> int`: Convert Type parsing flags to Type formatting flags. Type parsing flags lesser than 0x10 don't have stable meaning and will be ignored (more on these flags can be seen in idc.idc)
+- `parse_decl(out_tif: tinfo_t, til: til_t, decl: str, pt_flags: int) -> str`: Parse ONE declaration. If the input string contains more than one declaration, the first complete type declaration (PT_TYP) or the last variable declaration (PT_VAR) will be used.
+- `parse_decls(til: til_t, input: str, printer: printer_t *, hti_flags: int) -> int`: Parse many declarations and store them in a til. If there are any errors, they will be printed using 'printer'. This function uses default include path and predefined macros from the database settings. It always uses the HTI_DCL bit.
+- `print_type(ea: ida_idaapi.ea_t, prtype_flags: int) -> str`: Get type declaration for the specified address.
+- `tinfo_errstr(code: tinfo_code_t) -> str`: Helper function to convert an error code into a printable string. Additional arguments are handled using the functions from err.h
+- `del_named_type(ti: til_t, name: str, ntf_flags: int) -> bool`: Delete information about a symbol.
+- `first_named_type(ti: til_t, ntf_flags: int) -> str`: Enumerate types.
+- `next_named_type(ti: til_t, name: str, ntf_flags: int) -> str`: Enumerate types.
+- `copy_named_type(dsttil: til_t, srctil: til_t, name: str) -> int`: Copy a named type from one til to another. This function will copy the specified type and all dependent types from the source type library to the destination library.
+- `decorate_name(*args) -> str`: Decorate/undecorate a C symbol name.
+- `gen_decorate_name(name: str, should_decorate: bool, cc: callcnv_t, type: tinfo_t) -> str`: Generic function for decorate_name() (may be used in IDP modules)
+- `calc_c_cpp_name(name: str, type: tinfo_t, ccn_flags: int) -> str`: Get C or C++ form of the name.
+- `enable_numbered_types(ti: til_t, enable: bool) -> bool`: Enable the use of numbered types in til. Currently it is impossible to disable numbered types once they are enabled
+- `alloc_type_ordinals(ti: til_t, qty: int) -> int`: Allocate a range of ordinal numbers for new types.
+- `alloc_type_ordinal(ti: til_t) -> int`: alloc_type_ordinals(ti, 1)
+- `get_ordinal_limit(ti: til_t = None) -> int`: Get number of allocated ordinals + 1. If there are no allocated ordinals, return 0. To enumerate all ordinals, use: for ( uint32 i = 1; i < limit; ++i )
+- `get_ordinal_count(ti: til_t = None) -> int`: Get number of allocated ordinals.
+- `del_numbered_type(ti: til_t, ordinal: int) -> bool`: Delete a numbered type.
+- `set_type_alias(ti: til_t, src_ordinal: int, dst_ordinal: int) -> bool`: Create a type alias. Redirects all references to source type to the destination type. This is equivalent to instantaneous replacement all references to srctype by dsttype.
+- `get_alias_target(ti: til_t, ordinal: int) -> int`: Find the final alias destination. If the ordinal has not been aliased, return the specified ordinal itself If failed, returns 0.
+- `get_type_ordinal(ti: til_t, name: str) -> int`: Get type ordinal by its name.
+- `get_numbered_type_name(ti: til_t, ordinal: int) -> str`: Get type name (if exists) by its ordinal. If the type is anonymous, returns "". If failed, returns nullptr
+- `create_numbered_type_name(ord: int) -> str`: Create anonymous name for numbered type. This name can be used to reference a numbered type by its ordinal Ordinal names have the following format: '#' + set_de(ord) Returns: -1 if error, otherwise the name length
+- `is_ordinal_name(name: str, ord: uint32 * = None) -> bool`: Check if the name is an ordinal name. Ordinal names have the following format: '#' + set_de(ord)
+- `is_type_choosable(ti: til_t, ordinal: int) -> bool`: Check if a struct/union type is choosable
+- `set_type_choosable(ti: til_t, ordinal: int, value: bool) -> None`: Enable/disable 'choosability' flag for a struct/union type
+- `get_vftable_ea(ordinal: int) -> ida_idaapi.ea_t`: Get address of a virtual function table.
+- `get_vftable_ordinal(vftable_ea: ida_idaapi.ea_t) -> int`: Get ordinal number of the virtual function table.
+- `set_vftable_ea(ordinal: int, vftable_ea: ida_idaapi.ea_t) -> bool`: Set the address of a vftable instance for a vftable type.
+- `del_vftable_ea(ordinal: int) -> bool`: Delete the address of a vftable instance for a vftable type.
+- `deref_ptr(ptr_ea: ea_t *, tif: tinfo_t, closure_obj: ea_t * = None) -> bool`: Dereference a pointer.
+- `add_til(name: str, flags: int) -> int`: Load a til file and add it the database type libraries list. IDA will also apply function prototypes for matching function names.
+- `del_til(name: str) -> bool`: Unload a til file.
+- `apply_named_type(ea: ida_idaapi.ea_t, name: str) -> bool`: Apply the specified named type to the address.
+- `apply_tinfo(ea: ida_idaapi.ea_t, tif: tinfo_t, flags: int) -> bool`: Apply the specified type to the specified address. This function sets the type and tries to convert the item at the specified address to conform the type.
+- `apply_cdecl(til: til_t, ea: ida_idaapi.ea_t, decl: str, flags: int = 0) -> bool`: Apply the specified type to the address. This function parses the declaration and calls apply_tinfo()
+- `apply_callee_tinfo(caller: ida_idaapi.ea_t, tif: tinfo_t) -> bool`: Apply the type of the called function to the calling instruction. This function will append parameter comments and rename the local variables of the calling function. It also stores information about the instructions that initialize call arguments in the database. Use get_arg_addrs() to retrieve it if necessary. Alternatively it is possible to hook to processor_t::arg_addrs_ready event.
+- `apply_once_tinfo_and_name(dea: ida_idaapi.ea_t, tif: tinfo_t, name: str) -> bool`: Apply the specified type and name to the address. This function checks if the address already has a type. If the old type
+- `guess_tinfo(out: tinfo_t, id: tid_t) -> int`: Generate a type information about the id from the disassembly. id can be a structure/union/enum id or an address.
+- `set_c_header_path(incdir: str) -> None`: Set include directory path the target compiler.
+- `get_c_header_path() -> str`: Get the include directory path of the target compiler.
+- `set_c_macros(macros: str) -> None`: Set predefined macros for the target compiler.
+- `get_c_macros() -> str`: Get predefined macros for the target compiler.
+- `get_idati() -> til_t *`: Pointer to the local type library - this til is private for each IDB file Functions that accept til_t* default to idati when is nullptr provided.
+- `get_idainfo_by_type(tif: tinfo_t) -> size_t *, flags64_t *, opinfo_t *, size_t *`: Extract information from a tinfo_t.
+- `get_tinfo_by_flags(out: tinfo_t, flags: flags64_t) -> bool`: Get tinfo object that corresponds to data flags
+- `copy_tinfo_t(_this: tinfo_t, r: tinfo_t) -> None`
+- `detach_tinfo_t(_this: tinfo_t) -> bool`
+- `clear_tinfo_t(_this: tinfo_t) -> None`
+- `create_tinfo(_this: tinfo_t, bt: type_t, bt2: type_t, ptr: void *) -> bool`
+- `verify_tinfo(typid: typid_t) -> int`
+- `get_tinfo_details(typid: typid_t, bt2: type_t, buf: void *) -> bool`
+- `get_tinfo_size(p_effalign: uint32 *, typid: typid_t, gts_code: int) -> size_t`
+- `get_tinfo_pdata(outptr: void *, typid: typid_t, what: int) -> size_t`
+- `get_tinfo_property(typid: typid_t, gta_prop: int) -> size_t`
+- `get_tinfo_property4(typid: typid_t, gta_prop: int, p1: size_t, p2: size_t, p3: size_t, p4: size_t) -> size_t`
+- `set_tinfo_property(tif: tinfo_t, sta_prop: int, x: size_t) -> size_t`
+- `set_tinfo_property4(tif: tinfo_t, sta_prop: int, p1: size_t, p2: size_t, p3: size_t, p4: size_t) -> size_t`
+- `serialize_tinfo(type: qtype *, fields: qtype *, fldcmts: qtype *, tif: tinfo_t, sudt_flags: int) -> bool`
+- `find_tinfo_udt_member(udm: udm_t, typid: typid_t, strmem_flags: int) -> int`
+- `print_tinfo(prefix: str, indent: int, cmtindent: int, flags: int, tif: tinfo_t, name: str, cmt: str) -> str`
+- `dstr_tinfo(tif: tinfo_t) -> str`
+- `visit_subtypes(visitor: tinfo_visitor_t, out: type_mods_t, tif: tinfo_t, name: str, cmt: str) -> int`
+- `compare_tinfo(t1: typid_t, t2: typid_t, tcflags: int) -> bool`
+- `lexcompare_tinfo(t1: typid_t, t2: typid_t, arg3: int) -> int`
+- `get_stock_tinfo(tif: tinfo_t, id: stock_type_id_t) -> bool`
+- `read_tinfo_bitfield_value(typid: typid_t, v: uint64, bitoff: int) -> uint64`
+- `write_tinfo_bitfield_value(typid: typid_t, dst: uint64, v: uint64, bitoff: int) -> uint64`
+- `get_tinfo_attr(typid: typid_t, key: str, bv: bytevec_t *, all_attrs: bool) -> bool`
+- `set_tinfo_attr(tif: tinfo_t, ta: type_attr_t, may_overwrite: bool) -> bool`
+- `del_tinfo_attr(tif: tinfo_t, key: str, make_copy: bool) -> bool`
+- `get_tinfo_attrs(typid: typid_t, tav: type_attrs_t, include_ref_attrs: bool) -> bool`
+- `set_tinfo_attrs(tif: tinfo_t, ta: type_attrs_t) -> bool`
+- `score_tinfo(tif: tinfo_t) -> int`
+- `save_tinfo(tif: tinfo_t, til: til_t, ord: size_t, name: str, ntf_flags: int) -> tinfo_code_t`
+- `append_tinfo_covered(out: rangeset_t, typid: typid_t, offset: uint64) -> bool`
+- `calc_tinfo_gaps(out: rangeset_t, typid: typid_t) -> bool`
+- `value_repr_t__from_opinfo(_this: value_repr_t, flags: flags64_t, afl: aflags_t, opinfo: opinfo_t, ap: array_parameters_t) -> bool`
+- `value_repr_t__print_(_this: value_repr_t, colored: bool) -> str`
+- `udt_type_data_t__find_member(_this: udt_type_data_t, udm: udm_t, strmem_flags: int) -> ssize_t`
+- `udt_type_data_t__get_best_fit_member(_this: udt_type_data_t, disp: asize_t) -> ssize_t`
+- `get_tinfo_by_edm_name(tif: tinfo_t, til: til_t, mname: str) -> ssize_t`
+- `remove_pointer(tif: tinfo_t) -> tinfo_t`: BT_PTR: If the current type is a pointer, return the pointed object. If the current type is not a pointer, return the current type. See also get_ptrarr_object() and get_pointed_object()
+- `guess_func_cc(fti: func_type_data_t, npurged: int, cc_flags: int) -> callcnv_t`: Use func_type_data_t::guess_cc()
+- `dump_func_type_data(fti: func_type_data_t, praloc_bits: int) -> str`: Use func_type_data_t::dump()
+- `calc_arglocs(fti: func_type_data_t) -> bool`
+- `calc_varglocs(fti: func_type_data_t, regs: regobjs_t, stkargs: relobj_t, nfixed: int) -> bool`
+- `stroff_as_size(plen: int, tif: tinfo_t, value: asize_t) -> bool`: Should display a structure offset expression as the structure size?
+- `visit_stroff_udms(sfv: udm_visitor_t, path: tid_t const *, disp: adiff_t *, appzero: bool) -> adiff_t *`: Visit structure fields in a stroff expression or in a reference to a struct data variable. This function can be used to enumerate all components of an expression like 'a.b.c'.
+- `is_one_bit_mask(mask: int) -> bool`: Is bitmask one bit?
+- `inf_pack_stkargs(*args) -> bool`
+- `inf_big_arg_align(*args) -> bool`
+- `inf_huge_arg_align(*args) -> bool`
+- `unpack_idcobj_from_idb(obj: idc_value_t *, tif: tinfo_t, ea: ida_idaapi.ea_t, off0: bytevec_t const *, pio_flags: int = 0) -> error_t`: Collection of register objects.
+- `unpack_idcobj_from_bv(obj: idc_value_t *, tif: tinfo_t, bytes: bytevec_t const &, pio_flags: int = 0) -> error_t`: Read a typed idc object from the byte vector.
+- `pack_idcobj_to_idb(obj: idc_value_t const *, tif: tinfo_t, ea: ida_idaapi.ea_t, pio_flags: int = 0) -> error_t`: Write a typed idc object to the database.
+- `pack_idcobj_to_bv(obj: idc_value_t const *, tif: tinfo_t, bytes: relobj_t, objoff: void *, pio_flags: int = 0) -> error_t`: Write a typed idc object to the byte vector. Byte vector may be non-empty, this function will append data to it
+- `apply_tinfo_to_stkarg(insn: insn_t const &, x: op_t const &, v: int, tif: tinfo_t, name: str) -> bool`: Helper function for the processor modules. to be called from processor_t::use_stkarg_type
+- `gen_use_arg_tinfos(_this: argtinfo_helper_t, caller: ida_idaapi.ea_t, fti: func_type_data_t, rargs: funcargvec_t) -> None`: Do not call this function directly, use argtinfo_helper_t.
+- `func_has_stkframe_hole(ea: ida_idaapi.ea_t, fti: func_type_data_t) -> bool`: Looks for a hole at the beginning of the stack arguments. Will make use of the IDB's func_t function at that place (if present) to help determine the presence of such a hole.
+- `lower_type(til: til_t, tif: tinfo_t, name: str = None, _helper: lowertype_helper_t = None) -> int`: Lower type. Inspect the type and lower all function subtypes using lower_func_type().
+- `replace_ordinal_typerefs(til: til_t, tif: tinfo_t) -> int`: Replace references to ordinal types by name references. This function 'unties' the type from the current local type library and makes it easier to export it.
+- `begin_type_updating(utp: update_type_t) -> None`: Mark the beginning of a large update operation on the types. Can be used with add_enum_member(), add_struc_member, etc... Also see end_type_updating()
+- `end_type_updating(utp: update_type_t) -> None`: Mark the end of a large update operation on the types (see begin_type_updating())
+- `get_named_type_tid(name: str) -> tid_t`: Get named local type TID
+- `get_tid_name(tid: tid_t) -> str`: Get a type name for the specified TID
+- `get_tid_ordinal(tid: tid_t) -> int`: Get type ordinal number for TID
+- `get_udm_by_fullname(udm: udm_t, fullname: str) -> ssize_t`: Get udt member by full name
+- `get_idainfo_by_udm(*args) -> bool`: Calculate IDA info from udt member
+- `create_enum_type(enum_name: str, ei: enum_type_data_t, enum_width: int, sign: type_sign_t, convert_to_bitmask: bool, enum_cmt: str = None) -> tid_t`: Create type enum
+- `calc_number_of_children(loc: argloc_t, tif: tinfo_t, dont_deref_ptr: bool = False) -> int`: Calculate max number of lines of a formatted c data, when expanded (PTV_EXPAND).
+- `get_enum_member_expr(tif: tinfo_t, serial: int, value: uint64) -> str`: Return a C expression that can be used to represent an enum member. If the value does not correspond to any single enum member, this function tries to find a bitwise combination of enum members that correspond to it. If more than half of value bits do not match any enum members, it fails.
+- `choose_named_type(out_sym: til_symbol_t, root_til: til_t, title: str, ntf_flags: int, predicate: predicate_t = None) -> bool`: Choose a type from a type library.
+- `choose_local_tinfo(ti: til_t, title: str, func: local_tinfo_predicate_t * = None, def_ord: int = 0, ud: void * = None) -> int`: Choose a type from the local type library.
+- `choose_local_tinfo_and_delta(delta: int32 *, ti: til_t, title: str, func: local_tinfo_predicate_t * = None, def_ord: int = 0, ud: void * = None) -> int`: Choose a type from the local type library and specify the pointer shift value.
+- `calc_retloc(*args) -> bool`: This function has the following signatures:
+- `register_custom_callcnv(cnv_incref: custom_callcnv_t) -> custom_callcnv_t *`: Register a calling convention
+- `unregister_custom_callcnv(cnv_decref: custom_callcnv_t) -> custom_callcnv_t *`: Unregister a calling convention
+- `idc_parse_decl(til: til_t, decl: str, flags: int) -> Tuple[str, bytes, bytes]`
+- `calc_type_size(til: til_t, type: bytes)`: Returns the size of a type
+- `apply_type(til: til_t, type: bytes, fields: bytes, ea: ida_idaapi.ea_t, flags: int) -> bool`: Apply the specified type to the address
+- `get_arg_addrs(caller: ida_idaapi.ea_t)`: Retrieve addresses of argument initialization instructions
+- `unpack_object_from_idb(til: til_t, type: bytes, fields: bytes, ea: ida_idaapi.ea_t, pio_flags: int = 0)`: Unpacks from the database at 'ea' to an object.
+- `unpack_object_from_bv(til: til_t, type: unpack_object_from_bv.bytes, fields: unpack_object_from_bv.bytes, bytes, pio_flags: int = 0)`: Unpacks a buffer into an object.
+- `pack_object_to_idb(obj, til: til_t, type: bytes, fields: bytes, ea: ida_idaapi.ea_t, pio_flags: int = 0)`: Write a typed object to the database.
+- `pack_object_to_bv(obj, til: til_t, type: bytes, fields: bytes, base_ea: ida_idaapi.ea_t, pio_flags: int = 0)`: Packs a typed object to a string
+- `idc_parse_types(input: str, flags: int) -> int`
+- `idc_get_type_raw(ea: ida_idaapi.ea_t) -> PyObject *`
+- `idc_get_local_type_raw(ordinal) -> Tuple[bytes, bytes]`
+- `idc_guess_type(ea: ida_idaapi.ea_t) -> str`
+- `idc_get_type(ea: ida_idaapi.ea_t) -> str`
+- `idc_set_local_type(ordinal: int, dcl: str, flags: int) -> int`
+- `idc_get_local_type(ordinal: int, flags: int) -> str`
+- `idc_print_type(type: bytes, fields: bytes, name: str, flags: int) -> str`
+- `idc_get_local_type_name(ordinal: int) -> str`
+- `get_named_type(til: til_t, name: str, ntf_flags: int)`: Get a type data by its name.
+- `get_named_type64(til: til_t, name: str, ntf_flags: int = 0) -> Tuple[int, bytes, bytes, str, str, int, int] | None`: Get a named type from a type library.
+- `print_decls(printer: text_sink_t, til: til_t, ordinals: List[int], flags: int) -> int`: Print types (and possibly their dependencies) in a format suitable for using in
+- `remove_tinfo_pointer(tif: tinfo_t, name: str, til: til_t) -> Tuple[bool, str]`: Remove pointer of a type. (i.e. convert "char *" into "char"). Optionally remove
+- `get_numbered_type(til: til_t, ordinal: int) -> Tuple[bytes, bytes, str, str, int] | None`: Get a type from a type library, by its ordinal
+- `set_numbered_type(ti: til_t, ordinal: int, ntf_flags: int, name: str, type: type_t const *, fields: p_list const * = None, cmt: str = None, fldcmts: p_list const * = None, sclass: sclass_t const * = None) -> tinfo_code_t`

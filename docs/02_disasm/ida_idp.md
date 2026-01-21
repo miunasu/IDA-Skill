@@ -1,0 +1,433 @@
+# ida_idp
+
+Contains definition of the interface to IDP modules.
+
+The interface consists of two structures:
+* definition of target assembler: ::ash
+* definition of current processor: ::ph
+
+These structures contain information about target processor and assembler features.
+It also defines two groups of kernel events:
+* processor_t::event_t processor related events
+* idb_event:event_code_t database related events
+
+The processor related events are used to communicate with the processor module. The database related events are used to inform any interested parties, like plugins or processor modules, about the changes in the database.
+
+## Constants
+
+- `IDP_INTERFACE_VERSION`: The interface version number.
+- `CF_STOP`: Instruction doesn't pass execution to the next instruction
+- `CF_CALL`: CALL instruction (should make a procedure here)
+- `CF_CHG1`: The instruction modifies the first operand.
+- `CF_CHG2`: The instruction modifies the second operand.
+- `CF_CHG3`: The instruction modifies the third operand.
+- `CF_CHG4`: The instruction modifies the fourth operand.
+- `CF_CHG5`: The instruction modifies the fifth operand.
+- `CF_CHG6`: The instruction modifies the sixth operand.
+- `CF_USE1`: The instruction uses value of the first operand.
+- `CF_USE2`: The instruction uses value of the second operand.
+- `CF_USE3`: The instruction uses value of the third operand.
+- `CF_USE4`: The instruction uses value of the fourth operand.
+- `CF_USE5`: The instruction uses value of the fifth operand.
+- `CF_USE6`: The instruction uses value of the sixth operand.
+- `CF_JUMP`: The instruction passes execution using indirect jump or call (thus needs additional analysis)
+- `CF_SHFT`: Bit-shift instruction (shl,shr...)
+- `CF_HLL`: Instruction may be present in a high level language function
+- `CF_CHG7`: The instruction modifies the seventh operand.
+- `CF_CHG8`: The instruction modifies the eighth operand.
+- `CF_USE7`: The instruction uses value of the seventh operand.
+- `CF_USE8`: The instruction uses value of the eighth operand.
+- `IRI_EXTENDED`: Is the instruction a "return"?
+- `IRI_RET_LITERALLY`: report only 'ret' instructions
+- `IRI_SKIP_RETTARGET`: exclude 'ret' instructions that have special targets (see set_ret_target in PC)
+- `IRI_STRICT`
+- `AS_OFFST`: offsets are 'offset xxx' ?
+- `AS_COLON`: create colons after data names ?
+- `AS_UDATA`: can use '?' in data directives
+- `AS_2CHRE`: double char constants are: "xy
+- `AS_NCHRE`: char constants are: 'x
+- `AS_N2CHR`: can't have 2 byte char consts
+- `AS_1TEXT`: 1 text per line, no bytes
+- `AS_NHIAS`: no characters with high bit
+- `AS_NCMAS`: no commas in ascii directives
+- `AS_HEXFM`: mask - hex number format
+- `ASH_HEXF0`: 34h
+- `ASH_HEXF1`: h'34
+- `ASH_HEXF2`: 34
+- `ASH_HEXF3`: 0x34
+- `ASH_HEXF4`: $34
+- `ASH_HEXF5`: <^R > (radix)
+- `AS_DECFM`: mask - decimal number format
+- `ASD_DECF0`: 34
+- `ASD_DECF1`: #34
+- `ASD_DECF2`
+- `ASD_DECF3`: .34
+- `AS_OCTFM`: mask - octal number format
+- `ASO_OCTF0`: 123o
+- `ASO_OCTF1`: 0123
+- `ASO_OCTF2`: 123
+- `ASO_OCTF3`: @123
+- `ASO_OCTF4`: o'123
+- `ASO_OCTF5`: 123q
+- `ASO_OCTF6`: ~123
+- `ASO_OCTF7`: q'123
+- `AS_BINFM`: mask - binary number format
+- `ASB_BINF0`: 010101b
+- `ASB_BINF1`: ^B010101
+- `ASB_BINF2`: %010101
+- `ASB_BINF3`: 0b1010101
+- `ASB_BINF4`: b'1010101
+- `ASB_BINF5`: b'1010101'
+- `AS_UNEQU`: replace undefined data items with EQU (for ANTA's A80)
+- `AS_ONEDUP`: One array definition per line.
+- `AS_NOXRF`: Disable xrefs during the output file generation.
+- `AS_XTRNTYPE`: Assembler understands type of extern symbols as ":type" suffix.
+- `AS_RELSUP`: Checkarg: 'and','or','xor' operations with addresses are possible.
+- `AS_LALIGN`: Labels at "align" keyword are supported.
+- `AS_NOCODECLN`: don't create colons after code names
+- `AS_NOSPACE`: No spaces in expressions.
+- `AS_ALIGN2`: .align directive expects an exponent rather than a power of 2 (.align 5 means to align at 32byte boundary)
+- `AS_ASCIIC`: ascii directive accepts C-like escape sequences (n,x01 and similar)
+- `AS_ASCIIZ`: ascii directive inserts implicit zero byte at the end
+- `AS2_BRACE`: Use braces for all expressions.
+- `AS2_STRINV`: Invert meaning of idainfo::wide_high_byte_first for text strings (for processors with bytes bigger than 8 bits)
+- `AS2_BYTE1CHAR`: One symbol per processor byte. Meaningful only for wide byte processors
+- `AS2_IDEALDSCR`: Description of struc/union is in the 'reverse' form (keyword before name), the same as in borland tasm ideal
+- `AS2_TERSESTR`: 'terse' structure initialization form; NAME<fld,fld,...> is supported
+- `AS2_COLONSUF`: addresses may have ":xx" suffix; this suffix must be ignored when extracting the address under the cursor
+- `AS2_YWORD`: a_yword field is present and valid
+- `AS2_ZWORD`: a_zword field is present and valid
+- `HKCB_GLOBAL`: is global event listener? if true, the listener will survive database closing and opening. it will stay in the memory until explicitly unhooked. otherwise the kernel will delete it as soon as the owner is unloaded. should be used only with PLUGIN_FIX plugins.
+- `PLFM_386`: Intel 80x86.
+- `PLFM_Z80`: 8085, Z80
+- `PLFM_I860`: Intel 860.
+- `PLFM_8051`: 8051
+- `PLFM_TMS`: Texas Instruments TMS320C5x.
+- `PLFM_6502`: 6502
+- `PLFM_PDP`: PDP11.
+- `PLFM_68K`: Motorola 680x0.
+- `PLFM_JAVA`: Java.
+- `PLFM_6800`: Motorola 68xx.
+- `PLFM_ST7`: SGS-Thomson ST7.
+- `PLFM_MC6812`: Motorola 68HC12.
+- `PLFM_MIPS`: MIPS.
+- `PLFM_ARM`: Advanced RISC Machines.
+- `PLFM_TMSC6`: Texas Instruments TMS320C6x.
+- `PLFM_PPC`: PowerPC.
+- `PLFM_80196`: Intel 80196.
+- `PLFM_Z8`: Z8.
+- `PLFM_SH`: Renesas (formerly Hitachi) SuperH.
+- `PLFM_NET`: Microsoft Visual Studio.Net.
+- `PLFM_AVR`: Atmel 8-bit RISC processor(s)
+- `PLFM_H8`: Hitachi H8/300, H8/2000.
+- `PLFM_PIC`: Microchip's PIC.
+- `PLFM_SPARC`: SPARC.
+- `PLFM_ALPHA`: DEC Alpha.
+- `PLFM_HPPA`: Hewlett-Packard PA-RISC.
+- `PLFM_H8500`: Hitachi H8/500.
+- `PLFM_TRICORE`: Tasking Tricore.
+- `PLFM_DSP56K`: Motorola DSP5600x.
+- `PLFM_C166`: Siemens C166 family.
+- `PLFM_ST20`: SGS-Thomson ST20.
+- `PLFM_IA64`: Intel Itanium IA64.
+- `PLFM_I960`: Intel 960.
+- `PLFM_F2MC`: Fujistu F2MC-16.
+- `PLFM_TMS320C54`: Texas Instruments TMS320C54xx.
+- `PLFM_TMS320C55`: Texas Instruments TMS320C55xx.
+- `PLFM_TRIMEDIA`: Trimedia.
+- `PLFM_M32R`: Mitsubishi 32bit RISC.
+- `PLFM_NEC_78K0`: NEC 78K0.
+- `PLFM_NEC_78K0S`: NEC 78K0S.
+- `PLFM_M740`: Mitsubishi 8bit.
+- `PLFM_M7700`: Mitsubishi 16bit.
+- `PLFM_ST9`: ST9+.
+- `PLFM_FR`: Fujitsu FR Family.
+- `PLFM_MC6816`: Motorola 68HC16.
+- `PLFM_M7900`: Mitsubishi 7900.
+- `PLFM_TMS320C3`: Texas Instruments TMS320C3.
+- `PLFM_KR1878`: Angstrem KR1878.
+- `PLFM_AD218X`: Analog Devices ADSP 218X.
+- `PLFM_OAKDSP`: Atmel OAK DSP.
+- `PLFM_TLCS900`: Toshiba TLCS-900.
+- `PLFM_C39`: Rockwell C39.
+- `PLFM_CR16`: NSC CR16.
+- `PLFM_MN102L00`: Panasonic MN10200.
+- `PLFM_TMS320C1X`: Texas Instruments TMS320C1x.
+- `PLFM_NEC_V850X`: NEC V850 and V850ES/E1/E2.
+- `PLFM_SCR_ADPT`: Processor module adapter for processor modules written in scripting languages.
+- `PLFM_EBC`: EFI Bytecode.
+- `PLFM_MSP430`: Texas Instruments MSP430.
+- `PLFM_SPU`: Cell Broadband Engine Synergistic Processor Unit.
+- `PLFM_DALVIK`: Android Dalvik Virtual Machine.
+- `PLFM_65C816`: 65802/65816
+- `PLFM_M16C`: Renesas M16C.
+- `PLFM_ARC`: Argonaut RISC Core.
+- `PLFM_UNSP`: SunPlus unSP.
+- `PLFM_TMS320C28`: Texas Instruments TMS320C28x.
+- `PLFM_DSP96K`: Motorola DSP96000.
+- `PLFM_SPC700`: Sony SPC700.
+- `PLFM_AD2106X`: Analog Devices ADSP 2106X.
+- `PLFM_PIC16`: Microchip's 16-bit PIC.
+- `PLFM_S390`: IBM's S390.
+- `PLFM_XTENSA`: Tensilica Xtensa.
+- `PLFM_RISCV`: RISC-V.
+- `PLFM_RL78`: Renesas RL78.
+- `PLFM_RX`: Renesas RX.
+- `PLFM_WASM`: WASM.
+- `PR_SEGS`: has segment registers?
+- `PR_USE32`: supports 32-bit addressing?
+- `PR_DEFSEG32`: segments are 32-bit by default
+- `PR_RNAMESOK`: allow user register names for location names
+- `PR_ADJSEGS`: IDA may adjust segments' starting/ending addresses.
+- `PR_DEFNUM`: mask - default number representation
+- `PRN_HEX`: hex
+- `PRN_OCT`: octal
+- `PRN_DEC`: decimal
+- `PRN_BIN`: binary
+- `PR_WORD_INS`: instruction codes are grouped 2bytes in binary line prefix
+- `PR_NOCHANGE`: The user can't change segments and code/data attributes (display only)
+- `PR_ASSEMBLE`: Module has a built-in assembler and will react to ev_assemble.
+- `PR_ALIGN`: All data items should be aligned properly.
+- `PR_TYPEINFO`: the processor module fully supports type information callbacks; without full support, function argument locations and other things will probably be wrong.
+- `PR_USE64`: supports 64-bit addressing?
+- `PR_SGROTHER`: the segment registers don't contain the segment selectors.
+- `PR_STACK_UP`: the stack grows up
+- `PR_BINMEM`: the processor module provides correct segmentation for binary files (i.e. it creates additional segments). The kernel will not ask the user to specify the RAM/ROM sizes
+- `PR_SEGTRANS`: the processor module supports the segment translation feature (meaning it calculates the code addresses using the map_code_ea() function)
+- `PR_CHK_XREF`: don't allow near xrefs between segments with different bases
+- `PR_NO_SEGMOVE`: the processor module doesn't support move_segm() (i.e. the user can't move segments)
+- `PR_USE_ARG_TYPES`: use processor_t::use_arg_types callback
+- `PR_SCALE_STKVARS`: use processor_t::get_stkvar_scale callback
+- `PR_DELAYED`: has delayed jumps and calls. If this flag is set, processor_t::is_basic_block_end, processor_t::delay_slot_insn should be implemented
+- `PR_ALIGN_INSN`: allow ida to create alignment instructions arbitrarily. Since these instructions might lead to other wrong instructions and spoil the listing, IDA does not create them by default anymore
+- `PR_PURGING`: there are calling conventions which may purge bytes from the stack
+- `PR_CNDINSNS`: has conditional instructions
+- `PR_USE_TBYTE`: BTMT_SPECFLT means _TBYTE type
+- `PR_DEFSEG64`: segments are 64-bit by default
+- `PR_OUTER`: has outer operands (currently only mc68k)
+- `PR2_MAPPINGS`: the processor module uses memory mapping
+- `PR2_IDP_OPTS`: the module has processor-specific configuration options
+- `PR2_CODE16_BIT`: low bit of code addresses has special meaning e.g. ARM Thumb, MIPS16
+- `PR2_MACRO`: processor supports macro instructions
+- `PR2_USE_CALCREL`: (Lumina) the module supports calcrel info
+- `PR2_REL_BITS`: (Lumina) calcrel info has bits granularity, not bytes - construction flag only
+- `PR2_FORCE_16BIT`: use 16-bit basic types despite of 32-bit segments (used by c166)
+- `OP_FP_BASED`: operand is FP based
+- `OP_SP_BASED`: operand is SP based
+- `OP_SP_ADD`: operand value is added to the pointer
+- `OP_SP_SUB`: operand value is subtracted from the pointer
+- `CUSTOM_INSN_ITYPE`: Custom instruction codes defined by processor extension plugins must be greater than or equal to this
+- `REG_SPOIL`: processor_t::use_regarg_type uses this bit in the return value to indicate that the register value has been spoiled
+- `NO_ACCESS`
+- `WRITE_ACCESS`
+- `READ_ACCESS`
+- `RW_ACCESS`
+- `SETPROC_IDB`: set processor type for old idb
+- `SETPROC_LOADER`: set processor type for new idb; if the user has specified a compatible processor, return success without changing it. if failure, call loader_failure()
+- `SETPROC_LOADER_NON_FATAL`: the same as SETPROC_LOADER but non-fatal failures.
+- `SETPROC_USER`: set user-specified processor used for -p and manual processor change at later time
+- `LTC_NONE`: no event (internal use)
+- `LTC_ADDED`: added a local type
+- `LTC_DELETED`: deleted a local type
+- `LTC_EDITED`: edited a local type
+- `LTC_ALIASED`: added a type alias
+- `LTC_COMPILER`: changed the compiler and calling convention
+- `LTC_TIL_LOADED`: loaded a til file
+- `LTC_TIL_UNLOADED`: unloaded a til file
+- `LTC_TIL_COMPACTED`: numbered types have been compacted compact_numbered_types()
+- `closebase`
+- `savebase`
+- `upgraded`
+- `auto_empty`
+- `auto_empty_finally`
+- `determined_main`
+- `extlang_changed`
+- `idasgn_loaded`
+- `kernel_config_loaded`
+- `loader_finished`
+- `flow_chart_created`
+- `compiler_changed`
+- `changing_ti`
+- `ti_changed`
+- `changing_op_ti`
+- `op_ti_changed`
+- `changing_op_type`
+- `op_type_changed`
+- `segm_added`
+- `deleting_segm`
+- `segm_deleted`
+- `changing_segm_start`
+- `segm_start_changed`
+- `changing_segm_end`
+- `segm_end_changed`
+- `changing_segm_name`
+- `segm_name_changed`
+- `changing_segm_class`
+- `segm_class_changed`
+- `segm_attrs_updated`
+- `segm_moved`
+- `allsegs_moved`
+- `func_added`
+- `func_updated`
+- `set_func_start`
+- `set_func_end`
+- `deleting_func`
+- `frame_deleted`
+- `thunk_func_created`
+- `func_tail_appended`
+- `deleting_func_tail`
+- `func_tail_deleted`
+- `tail_owner_changed`
+- `func_noret_changed`
+- `stkpnts_changed`
+- `updating_tryblks`
+- `tryblks_updated`
+- `deleting_tryblks`
+- `sgr_changed`
+- `make_code`
+- `make_data`
+- `destroyed_items`
+- `renamed`
+- `byte_patched`
+- `changing_cmt`
+- `cmt_changed`
+- `changing_range_cmt`
+- `range_cmt_changed`
+- `extra_cmt_changed`
+- `item_color_changed`
+- `callee_addr_changed`
+- `bookmark_changed`
+- `sgr_deleted`
+- `adding_segm`
+- `func_deleted`
+- `dirtree_mkdir`
+- `dirtree_rmdir`
+- `dirtree_link`
+- `dirtree_move`
+- `dirtree_rank`
+- `dirtree_rminode`
+- `dirtree_segm_moved`
+- `local_types_changed`
+- `lt_udm_created`
+- `lt_udm_deleted`
+- `lt_udm_renamed`
+- `lt_udm_changed`
+- `lt_udt_expanded`
+- `frame_created`
+- `frame_udm_created`
+- `frame_udm_deleted`
+- `frame_udm_renamed`
+- `frame_udm_changed`
+- `frame_expanded`
+- `idasgn_matched_ea`
+- `lt_edm_created`
+- `lt_edm_deleted`
+- `lt_edm_renamed`
+- `lt_edm_changed`
+- `local_type_renamed`
+- `IDPOPT_CST`
+- `IDPOPT_JVL`
+- `IDPOPT_PRI_DEFAULT`
+- `IDPOPT_PRI_HIGH`
+- `IDPOPT_NUM_INT`
+- `IDPOPT_NUM_CHAR`
+- `IDPOPT_NUM_SHORT`
+- `IDPOPT_NUM_RANGE`
+- `IDPOPT_NUM_UNS`
+- `IDPOPT_BIT_UINT`
+- `IDPOPT_BIT_UCHAR`
+- `IDPOPT_BIT_USHORT`
+- `IDPOPT_BIT_BOOL`
+- `IDPOPT_STR_QSTRING`
+- `IDPOPT_STR_LONG`
+- `IDPOPT_I64_RANGE`
+- `IDPOPT_I64_UNS`
+- `IDPOPT_CST_PARAMS`
+- `IDPOPT_MBROFF`
+- `cik_string`
+- `cik_filename`
+- `cik_path`
+- `REAL_ERROR_FORMAT`
+- `REAL_ERROR_RANGE`
+- `REAL_ERROR_BADDATA`
+- `IDPOPT_STR`
+- `IDPOPT_NUM`
+- `IDPOPT_BIT`
+- `IDPOPT_FLT`
+- `IDPOPT_I64`
+- `IDPOPT_OK`
+- `IDPOPT_BADKEY`
+- `IDPOPT_BADTYPE`
+- `IDPOPT_BADVALUE`
+- `ph`
+
+## Classes Overview
+
+- `reg_access_vec_t`
+- `asm_t`
+- `reg_info_t`
+- `reg_access_t`
+- `reg_accesses_t`
+- `num_range_t`
+- `params_t`
+- `IDP_Hooks`
+- `processor_t`
+- `IDB_Hooks`
+
+## Functions Overview
+
+- `has_cf_chg(feature: int, opnum: uint) -> bool`: Does an instruction with the specified feature modify the i-th operand?
+- `has_cf_use(feature: int, opnum: uint) -> bool`: Does an instruction with the specified feature use a value of the i-th operand?
+- `has_insn_feature(icode: uint16, bit: int) -> bool`: Does the specified instruction have the specified feature?
+- `is_call_insn(insn: insn_t const &) -> bool`: Is the instruction a "call"?
+- `is_ret_insn(*args) -> bool`
+- `is_indirect_jump_insn(insn: insn_t const &) -> bool`: Is the instruction an indirect jump?
+- `is_basic_block_end(insn: insn_t const &, call_insn_stops_block: bool) -> bool`: Is the instruction the end of a basic block?
+- `get_ph() -> processor_t *`
+- `get_ash() -> asm_t *`
+- `str2reg(p: str) -> int`: Get any register number (-1 on error)
+- `is_align_insn(ea: ida_idaapi.ea_t) -> int`: If the instruction at 'ea' looks like an alignment instruction, return its length in bytes. Otherwise return 0.
+- `get_reg_name(reg: int, width: size_t, reghi: int = -1) -> str`: Get text representation of a register. For most processors this function will just return processor_t::reg_names[reg]. If the processor module has implemented processor_t::get_reg_name, it will be used instead
+- `parse_reg_name(ri: reg_info_t, regname: str) -> bool`: Get register info by name.
+- `set_processor_type(procname: str, level: setproc_level_t) -> bool`: Set target processor type. Once a processor module is loaded, it cannot be replaced until we close the idb.
+- `get_idp_name() -> str`: Get name of the current processor module. The name is derived from the file name. For example, for IBM PC the module is named "pc.w32" (windows version), then the module name is "PC" (uppercase). If no processor module is loaded, this function will return nullptr
+- `set_target_assembler(asmnum: int) -> bool`: Set target assembler.
+- `gen_idb_event(*args) -> None`: the kernel will use this function to generate idb_events
+- `register_cfgopts(opts: cfgopt_t const [], nopts: size_t, cb: config_changed_cb_t * = None, obj: void * = None) -> bool`
+- `get_config_value(key: str) -> jvalue_t *`
+- `cfg_get_cc_parm(compid: comp_t, name: str) -> str`
+- `cfg_get_cc_header_path(compid: comp_t) -> str`
+- `cfg_get_cc_predefined_macros(compid: comp_t) -> str`
+- `process_config_directive(directive: str, priority: int = 2) -> None`
+- `AssembleLine(ea, cs, ip, use32, line)`: Assemble an instruction to a string (display a warning if an error is found)
+- `assemble(ea, cs, ip, use32, line)`: Assemble an instruction into the database (display a warning if an error is found)
+- `ph_get_id()`: Returns the 'ph.id' field
+- `ph_get_version()`: Returns the 'ph.version'
+- `ph_get_flag()`: Returns the 'ph.flag'
+- `ph_get_cnbits()`: Returns the 'ph.cnbits'
+- `ph_get_dnbits()`: Returns the 'ph.dnbits'
+- `ph_get_reg_first_sreg()`: Returns the 'ph.reg_first_sreg'
+- `ph_get_reg_last_sreg()`: Returns the 'ph.reg_last_sreg'
+- `ph_get_segreg_size()`: Returns the 'ph.segreg_size'
+- `ph_get_reg_code_sreg()`: Returns the 'ph.reg_code_sreg'
+- `ph_get_reg_data_sreg()`: Returns the 'ph.reg_data_sreg'
+- `ph_get_icode_return()`: Returns the 'ph.icode_return'
+- `ph_get_instruc_start()`: Returns the 'ph.instruc_start'
+- `ph_get_instruc_end()`: Returns the 'ph.instruc_end'
+- `ph_get_tbyte_size()`: Returns the 'ph.tbyte_size' field as defined in he processor module
+- `ph_get_instruc()`: Returns a list of tuples (instruction_name, instruction_feature) containing the
+- `ph_get_regnames()`: Returns the list of register names as defined in the processor module
+- `ph_get_operand_info(ea: ida_idaapi.ea_t, n: int) -> Tuple[int, ida_idaapi.ea_t, int, int, int] | None`: Returns the operand information given an ea and operand number.
+- `ph_calcrel(ea: ida_idaapi.ea_t) -> bytevec_t *, size_t *`
+- `ph_find_reg_value(insn: insn_t const &, reg: int) -> uint64 *`
+- `ph_find_op_value(insn: insn_t const &, op: int) -> uint64 *`
+- `ph_get_reg_accesses(accvec: reg_accesses_t, insn: insn_t const &, flags: int) -> ssize_t`
+- `ph_get_abi_info(comp: comp_t) -> qstrvec_t *, qstrvec_t *`
+- `get_idp_notifier_addr(arg1: PyObject *) -> PyObject *`
+- `get_idp_notifier_ud_addr(hooks: IDP_Hooks) -> PyObject *`
+- `delay_slot_insn(ea: ea_t *, bexec: bool *, fexec: bool *) -> bool`
+- `get_reg_info(regname: str, bitrange: bitrange_t) -> str`
+- `sizeof_ldbl() -> size_t`
+- `str2sreg(name: str)`: get segment register number from its name or -1
+- `get_idb_notifier_addr(arg1: PyObject *) -> PyObject *`
+- `get_idb_notifier_ud_addr(hooks: IDB_Hooks) -> PyObject *`
