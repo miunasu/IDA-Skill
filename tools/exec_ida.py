@@ -215,6 +215,9 @@ def main():
     elif mode == "--code-std":
         # 从标准输入读取代码（适用于 PowerShell here-string）
         code = sys.stdin.read()
+        # Strip UTF-8 BOM if present (PowerShell 5.x $OutputEncoding may inject it)
+        if code.startswith('\ufeff'):
+            code = code[1:]
         if not code.strip():
             print("[-] No code received from stdin")
             print("[*] Make sure you are using PowerShell here-string syntax:")
