@@ -342,10 +342,9 @@ def run_ida_analysis(binary_path, output_dir):
                 full_path = os.path.abspath(os.path.join(output_dir, f))
                 print(f"    - {full_path}")
             
-            # 输出 i64 数据库文件路径（如果存在）
-            i64_path = os.path.splitext(binary_path)[0] + ".i64"
-            if os.path.exists(i64_path):
-                print(f"    - {os.path.abspath(i64_path)} (IDA database)")
+            # 输出 i64 数据库文件路径（预估，不验证是否存在）
+            i64_path = binary_path + ".i64"
+            print(f"    - {os.path.abspath(i64_path)} (IDA database)")
             
             return True
         else:
