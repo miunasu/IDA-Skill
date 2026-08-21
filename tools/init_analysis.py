@@ -316,17 +316,18 @@ def run_ida_analysis(binary_path, output_dir):
         print(f"[*] Running IDA analysis...")
         
         # 构建命令
+        # 使用参数列表并禁用 shell（shell=False），避免路径中的引号和空格等字符被 shell 二次解释
         cmd = [
-            f'"{idat_path}"',
+            idat_path,
             "-A",
-            f'-S"{script_path}"',
-            f'"{binary_path}"'
+            f"-S{script_path}",
+            binary_path
         ]
         
         # 执行
         result = subprocess.run(
-            " ".join(cmd),
-            shell=True,
+            cmd,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=600

@@ -108,19 +108,20 @@ def run_ida_code(i64_path, code):
     process = None
     try:
         # 构建命令（不使用 -c，依赖脚本中的 qexit）
+        # 使用参数列表并禁用 shell（shell=False），避免路径中的引号和空格等字符被 shell 二次解释
         cmd = [
-            f'"{idat_path}"',
+            idat_path,
             "-A",  # 自动分析
-            f'-L"{log_path}"',  # 输出日志
-            f'-S"{script_path}"',
-            f'"{i64_path}"'
+            f"-L{log_path}",  # 输出日志
+            f"-S{script_path}",
+            i64_path
         ]
         
         # 启动进程并阻塞等待完成
         # 使用 utf-8 编码避免 GBK 解码错误，errors='replace' 确保不会因编码问题崩溃
         process = subprocess.Popen(
-            " ".join(cmd),
-            shell=True,
+            cmd,
+            shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
