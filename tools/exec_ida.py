@@ -117,12 +117,15 @@ def run_ida_code(i64_path, code):
         ]
         
         # 启动进程并阻塞等待完成
+        # 使用 utf-8 编码避免 GBK 解码错误，errors='replace' 确保不会因编码问题崩溃
         process = subprocess.Popen(
             " ".join(cmd),
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            encoding='utf-8',
+            errors='replace'
         )
         
         # 等待进程完成（不设置超时，让 IDA 自然完成）
