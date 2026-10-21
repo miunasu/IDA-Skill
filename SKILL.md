@@ -13,6 +13,8 @@ description: IDA Pro 逆向分析。通过 IDAPython 脚本获取反汇编、反
 
 对新样本进行初始化分析，自动生成 i64 数据库并提取所有基础信息：
 
+**注：下文全部示例皆为相对路径**
+
 示例：
 ```powershell
 python skills/IDA-Skill/tools/init_analysis.py target.exe
